@@ -1,0 +1,5 @@
+# Normalize line endings so Windows and Linux CI see identical files.
+* text=auto eol=lf
+
+# Test fixtures are compared byte-for-byte; never let git rewrite them.
+tests/data/** -text
