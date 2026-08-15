@@ -58,8 +58,6 @@ class TestConstruction:
             Trace([0.0, 0.1], [1.0, 2.0], history=("dff",))
 
     def test_empty_trace_is_constructible(self) -> None:
-        # An empty result is a legitimate outcome of cropping. It must not crash
-        # at construction; it should crash only when asked for a rate or a span.
         t = Trace([], [])
         assert len(t) == 0
 
@@ -99,8 +97,6 @@ class TestImmutability:
         assert t.meta["rig"] == "A"
 
     def test_traces_are_unhashable(self, simple_trace: Trace) -> None:
-        # RamiPho defined __hash__ as hash(dict_values), which always raised.
-        # Being explicitly unhashable is honest and fails at the right moment.
         with pytest.raises(TypeError):
             hash(simple_trace)
 
@@ -112,8 +108,6 @@ class TestGeometry:
         assert t.fs == pytest.approx(30.0)
 
     def test_rate_is_unaffected_by_the_interleaving_of_the_source_file(self) -> None:
-        # Three LEDs multiplexed at 90 Hz gives each channel 30 Hz. A demuxed
-        # trace carries only its own timestamps, so it can only report 30.
         interleaved = np.arange(300) / 90.0
         demuxed = Trace(interleaved[::3], np.zeros(100), name="Region0G")
         assert demuxed.fs == pytest.approx(30.0)
@@ -239,8 +233,6 @@ class TestTimeSlice:
         np.testing.assert_allclose(out.values, [2.0, 3.0, 4.0])
 
     def test_records_how_many_samples_it_dropped(self) -> None:
-        # Nothing in FluoroFlow discards samples silently; RamiPho truncated every
-        # channel to the shortest one with no record at all.
         t = Trace(np.arange(10) / 10.0, np.arange(10, dtype=float))
         params = t.time_slice(0.2, 0.5).history[-1].params
         assert params["n_dropped_before"] == 2
@@ -311,10 +303,8 @@ class TestEqualityAndRepr:
         assert Trace([0.0, 0.1], [1.0, 2.0], name="x") != other
 
     def test_comparison_with_a_non_trace_is_false_not_an_error(self, simple_trace: Trace) -> None:
-        # RamiPho raised TypeError here, which meant `curve in some_list` blew up.
         assert simple_trace != None  # noqa: E711
         assert simple_trace != 3
-        # Exercise __eq__ directly, not just __ne__, since they are separate hooks.
         assert simple_trace.__eq__("Region0G") is NotImplemented
 
     def test_repr_summarises_without_dumping_the_data(self, simple_trace: Trace) -> None:

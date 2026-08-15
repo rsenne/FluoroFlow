@@ -91,7 +91,6 @@ class TestConstruction:
             Recording(traces={"A": np.zeros(5)})  # type: ignore[dict-item]
 
     def test_a_channel_spec_must_reference_traces_that_exist(self) -> None:
-        # Caught at construction, not three transforms later inside a worker pool.
         with pytest.raises(ValidationError, match="no such trace"):
             Recording.from_traces(make_trace("Region0G"), channels=(ChannelSpec("Region1R"),))
 
@@ -221,8 +220,6 @@ class TestMapTraces:
         assert set(out) == {"Region0G_dff", "Region0G_iso_dff"}
 
     def test_a_rename_follows_through_into_the_channel_specs(self, recording: Recording) -> None:
-        # Otherwise the recording would still declare a pairing pointing at keys
-        # that no longer exist, and Recording's own validation would reject it.
         out = recording.map_traces(lambda t: t.rename(f"{t.name}_dff"))
         spec = out.channel("Region0G_dff")
         assert spec.control == "Region0G_iso_dff"

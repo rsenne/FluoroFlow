@@ -133,8 +133,6 @@ class TestCheckPercentage:
             check_percentage(math.nan)
 
     def test_error_message_teaches_the_convention(self) -> None:
-        # The whole point of this guard: someone reaching for a fraction should be
-        # told, in the traceback, that percentiles here are in percent.
         with pytest.raises(ValidationError, match=r"pass 8, not 0\.08"):
             check_percentage(800.0)
 
@@ -163,10 +161,6 @@ class TestMedianDt:
         assert median_dt(as_series(time, label="t")) == pytest.approx(1 / 30.0)
 
     def test_second_difference_would_be_wrong_where_the_median_is_right(self) -> None:
-        # Regression guard for the RamiPho bug: taking `np.diff(t)[1]` off an
-        # interleaved timestamp column measures the inter-LED gap, so the reported
-        # rate came out ~3x too high for a 3-LED acquisition. Estimating from a
-        # de-interleaved channel's own timestamps is what makes it correct.
         per_channel_fs = 30.0
         n_leds = 3
         interleaved = np.arange(300) / (per_channel_fs * n_leds)

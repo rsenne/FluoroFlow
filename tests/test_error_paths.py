@@ -1,9 +1,4 @@
-"""Coverage for the guards that only fire on misuse.
-
-These paths matter more than they look. Every one of them is the difference
-between a sentence naming the problem and a NumPy broadcasting error forty lines
-downstream, which is the failure mode that made the old code painful to trust.
-"""
+"""Tests for invalid inputs and edge cases."""
 
 from __future__ import annotations
 
@@ -49,8 +44,6 @@ class TestEventGuards:
 
     @pytest.mark.parametrize("grid", [[], [0.0]])
     def test_to_boolean_on_a_grid_with_no_sample_interval(self, grid: list[float]) -> None:
-        # No interval means no scale to set a boundary tolerance from. There is at
-        # most one sample, so the exact comparison is the only sensible one.
         got = Events([0.0], durations=[1.0]).to_boolean(grid)
         assert got.tolist() == [True] * len(grid)
 
@@ -69,8 +62,6 @@ class TestRecordingGuards:
             Recording(traces={}).with_events(Trace([0.0, 0.1], [1.0, 2.0]))
 
     def test_from_traces_accepts_events_as_a_mapping(self) -> None:
-        # The tuple form is the documented convenience; the mapping form is what
-        # round-tripping a saved recording will hand back.
         rec = Recording.from_traces(
             Trace([0.0, 0.1], [1.0, 2.0], name="A"), events={"cue": Events([0.05], name="cue")}
         )
@@ -87,8 +78,6 @@ class TestRecordingGuards:
 
 class TestDatasetEdges:
     def test_a_transient_scheduled_past_the_end_is_dropped_not_crashed(self) -> None:
-        # Event-locked transients are placed at event + latency, which can land
-        # outside a short recording. That must be a no-op, not an IndexError.
         data = synthetic_recording(
             duration=5.0,
             event_times=[4.99],

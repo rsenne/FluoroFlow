@@ -50,8 +50,6 @@ class TestStep:
         assert Step("dff") != None  # noqa: E711
 
     def test_steps_are_unhashable(self) -> None:
-        # A params mapping has no meaningful hash. Saying so up front beats
-        # RamiPho's __hash__, which raised TypeError from inside a dict lookup.
         with pytest.raises(TypeError):
             hash(Step("dff"))
 

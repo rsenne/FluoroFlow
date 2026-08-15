@@ -1,8 +1,4 @@
-"""FluoroFlow: fiber photometry analysis that is simple, fast, and hard to get wrong.
-
-The public API is curated: anything not re-exported here is an implementation
-detail that can change without notice.
-"""
+"""Public FluoroFlow API."""
 
 from __future__ import annotations
 

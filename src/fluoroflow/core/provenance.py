@@ -1,9 +1,4 @@
-"""Processing provenance: what was done to a signal, in order, with what parameters.
-
-Every FluoroFlow transform appends a :class:`Step` to its output's history. This
-is not bookkeeping for its own sake; downstream operations *read* the history
-to refuse unsafe combinations. See :data:`MEAN_REMOVED` for the motivating case.
-"""
+"""Ordered processing provenance for signals."""
 
 from __future__ import annotations
 
@@ -22,10 +17,7 @@ __all__ = [
     "Step",
 ]
 
-#: The step removed the signal's absolute offset (detrending, high-pass
-#: filtering, regression residuals). Dividing such a signal by its own mean
-#: (the classic broken ``dF/F``) is numerically meaningless, so
-#: :func:`fluoroflow.preprocess.dff` refuses to run on a trace carrying this tag.
+#: The step removed the signal's absolute offset, making mean-based dF/F invalid.
 MEAN_REMOVED = "mean-removed"
 
 #: The step estimated and removed a slow baseline (airPLS, asymmetric least
@@ -55,12 +47,10 @@ class Step:
         Short identifier for the operation, e.g. ``"airpls"``. By convention this
         matches the name of the function that produced it.
     params
-        The parameters the operation actually ran with, including defaults that
-        were filled in. Copied defensively and exposed read-only, so a step can
-        never be edited after the fact.
+        Resolved operation parameters. Copied and exposed read-only.
     tags
-        Semantic markers other operations can query. Prefer the module-level
-        constants such as :data:`MEAN_REMOVED` over bare strings.
+        Semantic markers other operations can query. Prefer module constants
+        such as :data:`MEAN_REMOVED`.
 
     Notes
     -----

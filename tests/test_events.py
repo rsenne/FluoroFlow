@@ -1,4 +1,4 @@
-"""Tests for Events, including the onset/offset detection RamiPho got wrong."""
+"""Tests for Events."""
 
 from __future__ import annotations
 
@@ -71,9 +71,6 @@ class TestFromBoolean:
         np.testing.assert_allclose(ev.durations, [2.0])
 
     def test_a_run_reaching_the_end_of_the_recording_is_closed_off(self) -> None:
-        # The old implementation lost or mis-indexed this case: with no following
-        # False sample there is no offset index, so the epoch must be closed one
-        # sample interval past the final timestamp.
         time = np.arange(5) * 1.0
         ev = Events.from_boolean([False, False, False, True, True], time)
         np.testing.assert_allclose(ev.times, [3.0])
@@ -97,9 +94,6 @@ class TestFromBoolean:
         np.testing.assert_allclose(ev.durations, [1.0, 1.0, 1.0])
 
     def test_a_lone_true_sample_has_no_measurable_width_and_refuses(self) -> None:
-        # Hypothesis found this: with one timestamp there is no interval, so any
-        # duration would be fabricated, and a fabricated duration silently broke
-        # the from_boolean/to_boolean round trip. Refusing is the honest answer.
         with pytest.raises(InsufficientSamplesError, match="at least 2 timestamps"):
             Events.from_boolean([True], [0.0])
 
@@ -143,9 +137,6 @@ class TestToBoolean:
         np.testing.assert_array_equal(restored, mask)
 
     def test_a_run_ending_one_sample_short_does_not_swallow_the_last_sample(self) -> None:
-        # Hypothesis found this. The offset is reconstructed as onset + duration,
-        # which in floating point lands just past the timestamp the duration was
-        # measured from, so an exact half-open comparison marked one sample too many.
         time = np.arange(18) / 20.0
         mask = np.ones(18, dtype=bool)
         mask[5] = False
@@ -154,9 +145,6 @@ class TestToBoolean:
         np.testing.assert_array_equal(restored, mask)
 
     def test_round_trips_on_a_wall_clock_time_base(self) -> None:
-        # Unix-epoch timestamps carry ~1e-7 s of float spacing, a thousand times
-        # more round-off than a clock starting at zero, so the boundary tolerance
-        # has to track the magnitude of the timestamps rather than be a constant.
         time = 1.7e9 + np.arange(200) / 30.0
         mask = np.zeros(200, dtype=bool)
         mask[3:50] = True
@@ -214,7 +202,6 @@ class TestSubsets:
         np.testing.assert_allclose(ev.within(1.0, 3.0).times, [1.0, 2.0])
 
     def test_within_keeps_an_epoch_that_extends_past_the_window(self) -> None:
-        # Truncating it would silently change a measured duration.
         ev = Events([1.0], durations=[100.0])
         np.testing.assert_allclose(ev.within(0.0, 2.0).durations, [100.0])
 

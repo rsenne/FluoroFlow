@@ -1,12 +1,4 @@
-"""The :class:`Recording`: every trace and event from one session, plus how they relate.
-
-The relationship between a signal channel and its movement-control channel is
-stated once, in a :class:`ChannelSpec`, and never inferred. The old
-``photonsoup`` code decided that a column ending in ``"G"`` meant green, that LED
-state 2 meant the green frame, and that timestamp set ``"2"`` therefore belonged
-to it. Every one of those is a property of one lab's rig configuration, not of
-photometry, and each was a silent wrong answer waiting for a rig change.
-"""
+"""Traces, events, and explicit channel relationships for one session."""
 
 from __future__ import annotations
 
@@ -36,8 +28,7 @@ class ChannelSpec:
         Key of the signal trace within the recording, e.g. ``"Region0G"``.
     control
         Key of the movement-control trace (isosbestic, tdTomato) to regress out,
-        or ``None`` when the channel has no control. ``None`` is a legitimate
-        configuration, not an oversight, and downstream code must handle it.
+        or ``None`` when the channel has no control.
     indicator
         Sensor name, e.g. ``"GCaMP6f"`` or ``"dLight1.3b"``.
     excitation_nm
@@ -114,8 +105,7 @@ class Recording:
     events
         Event sets keyed by name, same rule.
     channels
-        Signal-to-control pairings. Every key they reference must exist in
-        ``traces``, checked at construction rather than at analysis time.
+        Signal-to-control pairings. Referenced keys must exist in ``traces``.
     subject
         Animal identifier.
     session
@@ -131,9 +121,7 @@ class Recording:
 
     Notes
     -----
-    Every mutator returns a new recording. Nothing here loads files, spawns
-    workers, or computes anything: constructing a :class:`Recording` is cheap and
-    total, which is what makes it usable as a test fixture.
+    Mutator methods return new recordings.
 
     Examples
     --------
@@ -153,8 +141,6 @@ class Recording:
     subject: str | None = None
     session: str | None = None
     meta: Mapping[str, Any] = field(default_factory=dict)
-
-    # ------------------------------------------------------------ construction
 
     def __post_init__(self) -> None:
         """Validate keys, types, and cross-references, then freeze."""
@@ -214,8 +200,7 @@ class Recording:
         Parameters
         ----------
         *traces
-            The traces to include. Duplicate names are an error, because silently
-            keeping the last one would lose data.
+            Traces to include. Names must be unique.
         events
             Either a mapping already keyed by name, or a tuple of
             :class:`~fluoroflow.core.events.Events` to key automatically.
@@ -263,16 +248,13 @@ class Recording:
             meta=meta or {},
         )
 
-    # --------------------------------------------------------------- accessors
-
     def __getitem__(self, key: str) -> Trace:
         """Return the trace named ``key``.
 
         Raises
         ------
         KeyError
-            If no such trace exists. The message lists what is available, because
-            a typo in a region name should not require a debugger.
+            If no such trace exists.
         """
         try:
             return self.traces[key]
@@ -346,8 +328,7 @@ class Recording:
     def pairs(self) -> Iterator[tuple[ChannelSpec, Trace, Trace | None]]:
         """Iterate over ``(spec, signal_trace, control_trace)`` for each channel.
 
-        The control is ``None`` for channels declared without one. This is the
-        loop most preprocessing pipelines want.
+        The control is ``None`` for channels declared without one.
 
         Yields
         ------
@@ -370,8 +351,6 @@ class Recording:
         """
         spans = [t.duration for t in self.traces.values() if len(t) > 0]
         return max(spans) if spans else 0.0
-
-    # ------------------------------------------------------------- derivation
 
     def with_traces(self, *traces: Trace) -> Recording:
         """Return a copy with these traces added, replacing any of the same name.
@@ -458,10 +437,6 @@ class Recording:
     ) -> Recording:
         """Apply a trace-to-trace function across the recording.
 
-        This is the composition primitive: a preprocessing pipeline is a sequence
-        of ``map_traces`` calls, and because each transform records its own step,
-        the resulting histories describe the pipeline exactly.
-
         Parameters
         ----------
         fn
@@ -539,8 +514,6 @@ class Recording:
         fields.update(changes)
         return Recording(**fields)
 
-    # ------------------------------------------------------------------ export
-
     def describe(self) -> pd.DataFrame:
         """Summarise every trace as one row of a :class:`pandas.DataFrame`.
 
@@ -571,8 +544,6 @@ class Recording:
                 }
             )
         return pd.DataFrame(rows, columns=columns)
-
-    # ------------------------------------------------------------------ dunder
 
     def __eq__(self, other: object) -> bool:
         """Compare by value; returns :data:`NotImplemented` for non-recordings."""

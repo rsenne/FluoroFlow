@@ -1,10 +1,4 @@
-"""The :class:`Trace`: one fluorescence time series and everything known about it.
-
-A trace owns its own time vector. That single decision removes a whole family of
-bugs: after de-interleaving an interleaved acquisition, each channel carries the
-timestamps it was actually sampled at, so its sampling rate is derived from its
-own data and cannot be off by the number of multiplexed LEDs.
-"""
+"""Fluorescence time series with timestamps and processing history."""
 
 from __future__ import annotations
 
@@ -37,23 +31,18 @@ __all__ = ["SamplingReport", "Trace"]
 
 @dataclass(frozen=True, slots=True)
 class SamplingReport:
-    """Summary of how regular a trace's sampling actually was.
-
-    Photometry rigs drop frames. Rather than assume uniform sampling and be
-    quietly wrong, FluoroFlow measures it and hands you the numbers.
+    """Summary of a trace's sampling regularity.
 
     Attributes
     ----------
     dt_median
-        Median sample interval, in seconds. This is what :attr:`Trace.dt` reports.
+        Median sample interval, in seconds.
     dt_min, dt_max
         Extremes of the observed sample intervals, in seconds.
     cv
-        Coefficient of variation of the sample intervals (standard deviation over
-        mean). Below about 0.01 is a well-behaved recording.
+        Coefficient of variation of the sample intervals.
     n_gaps
-        Number of intervals longer than 1.5 times the median, i.e. the number of
-        places where at least one frame appears to be missing.
+        Number of intervals longer than 1.5 times the median.
     n_samples
         Length of the trace.
     """
@@ -69,8 +58,7 @@ class SamplingReport:
     def is_uniform(self) -> bool:
         """Whether the sampling is regular enough to treat as uniform.
 
-        True when there are no detected gaps and the coefficient of variation of
-        the sample intervals is below 1 percent.
+        True when there are no gaps and the interval CV is below 1 percent.
         """
         return self.n_gaps == 0 and self.cv < 0.01
 
@@ -91,8 +79,7 @@ class Trace:
     name
         Identifier for this trace, e.g. ``"Region0G"``.
     units
-        Free-text units, e.g. ``"a.u."``, ``"dF/F"``, ``"z"``. Carried along so a
-        plot axis label never has to be guessed.
+        Free-text units, e.g. ``"a.u."``, ``"dF/F"``, or ``"z"``.
     meta
         Arbitrary metadata. Copied defensively and exposed read-only.
     history
@@ -108,12 +95,10 @@ class Trace:
 
     Notes
     -----
-    Instances are frozen and their arrays are set non-writeable, so a trace is
-    safe to share between threads, cache, or hold as a reference point while
-    processing. Every transform returns a *new* trace via :meth:`derive`.
+    Instances are frozen and arrays are non-writeable. Transforms return a new
+    trace via :meth:`derive`.
 
-    Traces compare by value and are deliberately unhashable, since they wrap
-    mutable-sized numeric buffers with no meaningful hash.
+    Traces compare by value and are unhashable.
 
     Examples
     --------
@@ -135,8 +120,6 @@ class Trace:
     meta: Mapping[str, Any] = field(default_factory=dict)
     history: tuple[Step, ...] = ()
     _dt: float = field(init=False, repr=False)
-
-    # ------------------------------------------------------------ construction
 
     def __post_init__(self) -> None:
         """Coerce, validate, and freeze the inputs."""
@@ -173,10 +156,8 @@ class Trace:
     ) -> Trace:
         """Build a trace from values sampled at a known constant rate.
 
-        Convenience for synthetic data and for rigs that report a nominal rate
-        instead of per-sample timestamps. Prefer the normal constructor whenever
-        real timestamps exist, because real timestamps record dropped frames and a
-        reconstructed time base silently does not.
+        Prefer the normal constructor when real timestamps are available; a
+        reconstructed time base cannot represent dropped frames.
 
         Parameters
         ----------
@@ -199,15 +180,13 @@ class Trace:
         time = float(t0) + np.arange(arr.size, dtype=np.float64) / rate
         return cls(time=time, values=arr, name=name, units=units, meta=meta or {})
 
-    # --------------------------------------------------------------- geometry
-
     def __len__(self) -> int:
         """Number of samples."""
         return int(self.values.size)
 
     @property
     def n_samples(self) -> int:
-        """Number of samples. Spelled out, for readability at call sites."""
+        """Number of samples."""
         return int(self.values.size)
 
     @property
@@ -301,14 +280,8 @@ class Trace:
             n_samples=len(self),
         )
 
-    # ------------------------------------------------------------- provenance
-
     def has_tag(self, tag: str) -> bool:
         """Whether any recorded step carries ``tag``.
-
-        This is how transforms guard against unsafe composition. For example
-        ``dff`` checks :data:`~fluoroflow.core.provenance.MEAN_REMOVED` before
-        dividing by a baseline.
 
         Parameters
         ----------
@@ -347,8 +320,6 @@ class Trace:
         """
         return format_history(self.history)
 
-    # -------------------------------------------------------------- derivation
-
     def derive(
         self,
         *,
@@ -361,10 +332,8 @@ class Trace:
     ) -> Trace:
         """Return a new trace descended from this one, with ``step`` appended.
 
-        This is the only supported way to produce a transformed trace, and
-        ``step`` is a required keyword argument on purpose: it makes an
-        undocumented transform impossible to write by accident. Anything not
-        overridden is inherited.
+        Unspecified fields are inherited. ``step`` is required so every
+        transformation records its provenance.
 
         Parameters
         ----------
@@ -439,9 +408,7 @@ class Trace:
     def time_slice(self, start: float | None = None, stop: float | None = None) -> Trace:
         """Return the half-open time window ``[start, stop)`` as a new trace.
 
-        Cropping changes the time base, so it is recorded as a step, including how
-        many samples were dropped from each end. Nothing in FluoroFlow discards
-        samples silently.
+        The recorded step includes the number of samples dropped from each end.
 
         Parameters
         ----------
@@ -519,8 +486,6 @@ class Trace:
             return left
         return right
 
-    # ------------------------------------------------------------------ export
-
     def to_frame(self) -> pd.DataFrame:
         """Return the trace as a two-column :class:`pandas.DataFrame`.
 
@@ -534,14 +499,10 @@ class Trace:
 
         return pd.DataFrame({"time": np.asarray(self.time).copy(), self.name: self.values.copy()})
 
-    # ------------------------------------------------------------------ dunder
-
     def __eq__(self, other: object) -> bool:
         """Compare two traces by value, treating NaN in the same slot as equal.
 
-        Returns :data:`NotImplemented` for non-traces rather than raising, so that
-        Python can fall back to the other operand and ``trace == None`` is False
-        instead of an error.
+        Return :data:`NotImplemented` for other types.
         """
         if not isinstance(other, Trace):
             return NotImplemented

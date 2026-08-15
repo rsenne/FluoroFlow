@@ -1,8 +1,4 @@
-"""Reusable precondition guards.
-
-These exist so that every entry point rejects bad input the same way, with the
-same message shape, at construction time rather than three transforms later.
-"""
+"""Reusable input validation."""
 
 from __future__ import annotations
 
@@ -29,10 +25,6 @@ __all__ = [
 def as_series(x: Any, *, label: str) -> NDArray[np.float64]:
     """Coerce ``x`` to a read-only one-dimensional float64 array.
 
-    Read-only is the point: a :class:`~fluoroflow.core.trace.Trace` promises that
-    its data never changes, and that promise is worthless if a caller can reach
-    in and assign to the underlying buffer.
-
     Parameters
     ----------
     x
@@ -44,8 +36,8 @@ def as_series(x: Any, *, label: str) -> NDArray[np.float64]:
     Returns
     -------
     numpy.ndarray
-        A one-dimensional, ``float64``, non-writeable array. Copies only when it
-        has to; an array that is already read-only float64 is passed through.
+        A one-dimensional, ``float64``, non-writeable array. Already compatible,
+        read-only arrays are returned without copying.
 
     Raises
     ------
@@ -69,10 +61,6 @@ def as_series(x: Any, *, label: str) -> NDArray[np.float64]:
 
 def check_time_vector(time: NDArray[np.float64], *, label: str = "time") -> None:
     """Require a time vector to be finite and strictly increasing.
-
-    Strictly increasing (not merely sorted) is deliberate: duplicate timestamps
-    make interpolation, event alignment, and sampling-rate estimation ambiguous,
-    and duplicates in real files usually mean a de-interleaving mistake.
 
     Parameters
     ----------
@@ -108,10 +96,6 @@ def check_time_vector(time: NDArray[np.float64], *, label: str = "time") -> None
 
 def check_no_infinities(values: NDArray[np.float64], *, label: str = "values") -> None:
     """Reject infinities while allowing NaN.
-
-    NaN is meaningful in photometry: dropped frames, samples outside a trial
-    window, and masked artifacts are all legitimately missing. An infinity is
-    never legitimate; it means a division by zero happened upstream.
 
     Parameters
     ----------
@@ -186,13 +170,6 @@ def checked_name(name: Any, *, label: str = "name") -> str:
 def check_percentage(value: float, *, label: str = "percentile") -> float:
     """Require a percentile expressed in percent, on the closed interval [0, 100].
 
-    FluoroFlow states percentiles in percent everywhere, without exception. The
-    old ``photonsoup`` code called ``np.percentile(raw, 0.08)`` intending the 8th
-    percentile and silently got the 0.08th, which is a different number entirely.
-    A fraction slipped in where a percent belongs is the single easiest way to get
-    a plausible-looking wrong baseline, so a value below 1 is suspicious but legal
-    and a value above 100 is rejected outright.
-
     Parameters
     ----------
     value
@@ -261,8 +238,7 @@ def check_positive(value: float, *, label: str) -> float:
 def median_dt(time: NDArray[np.float64]) -> float:
     """Median sample interval of a time vector, or NaN if it is too short.
 
-    The median, not the mean and emphatically not ``diff(time)[1]``, so that a
-    single dropped frame or a pause in acquisition does not move the estimate.
+    The median is robust to isolated dropped frames or acquisition pauses.
 
     Parameters
     ----------

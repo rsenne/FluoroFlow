@@ -1,8 +1,4 @@
-"""Property-based invariants for the core data model.
-
-Example-based tests check the cases we thought of. These check the properties that
-must hold for every input, which is where the cases we did not think of live.
-"""
+"""Property-based tests for the core data model."""
 
 from __future__ import annotations
 
@@ -14,8 +10,7 @@ from hypothesis.extra import numpy as npst
 
 from fluoroflow import Events, Step, Trace
 
-# Finite, non-pathological magnitudes. Photometry counts are O(1e3); allowing
-# 1e300 would only test floating-point overflow, which is not the contract here.
+# Keep generated values within realistic photometry magnitudes.
 values = npst.arrays(
     dtype=np.float64,
     shape=npst.array_shapes(min_dims=1, max_dims=1, min_side=0, max_side=200),
@@ -25,8 +20,7 @@ values = npst.arrays(
 sample_counts = st.integers(min_value=0, max_value=200)
 rates = st.floats(min_value=0.5, max_value=1000.0, allow_nan=False, allow_infinity=False)
 
-# min_side=2, because measuring an epoch duration requires a sample interval and
-# Events.from_boolean refuses to invent one from a single timestamp.
+# Epoch durations require at least two timestamps.
 boolean_masks = npst.arrays(
     dtype=np.bool_,
     shape=npst.array_shapes(min_dims=1, max_dims=1, min_side=2, max_side=200),
@@ -59,8 +53,6 @@ class TestTraceInvariants:
     @given(sample_counts, rates)
     def test_the_derived_rate_matches_the_grid_it_was_built_on(self, n: int, fs: float) -> None:
         assume(n >= 2)
-        # Not bit-exact: the grid is built by division and the rate recovered by
-        # another division, so a few ulp of drift is expected and harmless.
         assert uniform_trace(n, fs).fs == pytest.approx(fs, rel=1e-9)
 
     @given(values)
@@ -81,8 +73,6 @@ class TestTraceInvariants:
 
     @given(sample_counts, st.floats(min_value=0.0, max_value=20.0))
     def test_time_slice_partitions_the_samples(self, n: int, cut: float) -> None:
-        # Whatever the window, kept plus dropped must account for every sample.
-        # This is the invariant RamiPho's silent truncation violated.
         assume(n >= 1)
         trace = uniform_trace(n, 10.0)
         out = trace.time_slice(stop=cut)

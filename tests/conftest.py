@@ -9,8 +9,7 @@ from hypothesis import HealthCheck, settings
 from fluoroflow import Trace
 from fluoroflow.datasets import SyntheticDataset, synthetic_recording
 
-# Numerical property tests do real work; a wall-clock deadline turns a slow CI
-# runner into a spurious failure.
+# Avoid deadline failures on slow CI runners.
 settings.register_profile(
     "fluoroflow",
     deadline=None,

@@ -1,9 +1,4 @@
-"""Event and epoch times: what happened, when, and for how long.
-
-Events are the bridge between photometry and behaviour. They are stored as
-times, never as sample indices, because an index is only meaningful relative to
-one particular channel's time base and photometry channels do not share one.
-"""
+"""Event onsets and epoch durations stored in seconds."""
 
 from __future__ import annotations
 
@@ -30,21 +25,16 @@ if TYPE_CHECKING:
 
 __all__ = ["Events"]
 
-#: Float64 machine epsilon, cached so the tolerance helper stays a few arithmetic
-#: operations rather than a numpy call per epoch.
+#: Float64 machine epsilon used for epoch boundary comparisons.
 _EPS = float(np.finfo(np.float64).eps)
 
 
 def _boundary_tolerance(grid: NDArray[np.float64]) -> float:
     """How close to a timestamp an epoch boundary must land to count as touching it.
 
-    An epoch offset is reconstructed as ``onset + duration``, and
-    ``(b - a) + a != b`` in floating point. The resulting error scales with the
-    magnitude of the timestamps, so a rig that reports a wall clock (order
-    :math:`10^9` seconds) accumulates roughly a microsecond of it while a rig that
-    starts at zero accumulates femtoseconds. The tolerance therefore tracks that
-    magnitude, with a floor relative to the sample interval and a hard ceiling at a
-    quarter of a sample so it can never absorb a real boundary.
+    Reconstructing an offset as ``onset + duration`` introduces error that scales
+    with timestamp magnitude. The tolerance is capped at a quarter sample so it
+    cannot absorb a real boundary.
 
     Parameters
     ----------
@@ -54,8 +44,7 @@ def _boundary_tolerance(grid: NDArray[np.float64]) -> float:
     Returns
     -------
     float
-        Absolute tolerance in seconds, or ``0.0`` for a grid too short to have an
-        interval, where at most one sample exists and the question is moot.
+        Absolute tolerance in seconds, or ``0.0`` when no interval exists.
     """
     step = median_dt(grid)
     if math.isnan(step):
@@ -72,8 +61,7 @@ class Events:
     ----------
     times
         Onset times in seconds, finite and non-decreasing. Simultaneous events are
-        allowed; out-of-order ones are not, since sorted input is what makes
-        :meth:`within` and :meth:`to_boolean` cheap and unambiguous.
+        allowed; out-of-order ones are not.
     name
         Identifier, e.g. ``"shock"`` or ``"freezing"``.
     durations
@@ -106,8 +94,6 @@ class Events:
     durations: NDArray[np.float64] | None = None
     labels: tuple[str, ...] | None = None
     meta: Mapping[str, Any] = field(default_factory=dict)
-
-    # ------------------------------------------------------------ construction
 
     def __post_init__(self) -> None:
         """Coerce, validate, and freeze the inputs."""
@@ -169,13 +155,9 @@ class Events:
 
         Each contiguous run of True becomes one epoch. The onset is the timestamp
         of the run's first True sample, and the epoch ends at the timestamp of the
-        first following False sample, so an epoch's duration counts the time its
-        samples actually occupy. A run that reaches the end of the recording is
+        first following False sample, so an epoch's duration covers its samples.
+        A run that reaches the end of the recording is
         closed off one median sample interval after the final sample.
-
-        This replaces the hand-rolled ``np.diff`` index arithmetic in the old
-        ``photonsoup`` code, which was off by one and assumed that 0 meant
-        "behaviour present".
 
         Parameters
         ----------
@@ -246,9 +228,8 @@ class Events:
             )
             raise InsufficientSamplesError(msg)
 
-        # An `end` index points at the first False sample after a run. When a run
-        # reaches the end of the recording there is no such sample, so the epoch
-        # is closed one median interval past the last timestamp.
+        # A terminal run has no following False sample; close it one interval
+        # after the final timestamp.
         n = times_arr.size
         last_edge = float(times_arr[-1]) + step
         onset = times_arr[starts]
@@ -260,8 +241,6 @@ class Events:
             durations=offset - onset,
             meta=meta or {},
         )
-
-    # --------------------------------------------------------------- accessors
 
     def __len__(self) -> int:
         """Number of events."""
@@ -308,8 +287,6 @@ class Events:
             raise ValidationError(msg)
         return float(self.durations.sum())
 
-    # ------------------------------------------------------------ derived sets
-
     def _subset(self, keep: NDArray[np.bool_], *, name: str | None = None) -> Events:
         """Return the subset selected by a boolean mask over events."""
         labels = None if self.labels is None else tuple(np.asarray(self.labels)[keep].tolist())
@@ -324,9 +301,7 @@ class Events:
     def within(self, start: float | None = None, stop: float | None = None) -> Events:
         """Return the events whose onset lies in the half-open window ``[start, stop)``.
 
-        Selection is on onset only. An epoch that starts inside the window and
-        extends past its end is kept whole, because truncating it would silently
-        change a measured duration.
+        Selection uses onset only; durations are never truncated.
 
         Parameters
         ----------
@@ -379,8 +354,7 @@ class Events:
     def shift(self, delta: float) -> Events:
         """Return a copy with every onset moved by ``delta`` seconds.
 
-        Useful for aligning a behaviour file to a photometry clock. Durations are
-        unchanged.
+        Durations are unchanged.
 
         Parameters
         ----------
@@ -403,15 +377,9 @@ class Events:
     def to_boolean(self, time: Any) -> NDArray[np.bool_]:
         """Render the epochs as a per-sample boolean vector on ``time``.
 
-        A sample is True when it falls in ``[onset, offset)`` of any epoch. This
-        is the inverse of :meth:`from_boolean` and the clean replacement for
-        ``photonsoup``'s per-sample Python loop over a behaviour dataframe.
-
-        Boundaries are matched to within a small fraction of a sample interval
-        rather than exactly. This is required, not sloppy: an epoch's offset is
-        reconstructed as ``onset + duration``, and in floating point that does not
-        reproduce the timestamp the duration was measured from. Comparing exactly
-        made a run ending on the last-but-one sample swallow one extra sample.
+        A sample is True when it falls in ``[onset, offset)`` of any epoch.
+        Boundaries use a small floating-point tolerance; see
+        :func:`_boundary_tolerance`.
 
         Parameters
         ----------
@@ -444,8 +412,6 @@ class Events:
             out[lo:hi] = True
         return out
 
-    # ------------------------------------------------------------------ export
-
     def to_frame(self) -> pd.DataFrame:
         """Return the events as a :class:`pandas.DataFrame`.
 
@@ -464,8 +430,6 @@ class Events:
         if self.labels is not None:
             data["label"] = list(self.labels)
         return pd.DataFrame(data)
-
-    # ------------------------------------------------------------------ dunder
 
     def __eq__(self, other: object) -> bool:
         """Compare by value; returns :data:`NotImplemented` for non-events."""

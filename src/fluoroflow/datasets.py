@@ -1,12 +1,6 @@
 r"""Synthetic photometry data with known ground truth.
 
-This module is load-bearing for the test suite, not a demo. A preprocessing step
-that runs without crashing has proved nothing; the question is whether it
-recovers the signal that was actually there. So FluoroFlow generates recordings
-from an explicit forward model and keeps the hidden components around, letting
-tests assert recovery rather than mere execution.
-
-The forward model is multiplicative, which is how photometry actually behaves:
+The multiplicative forward model is:
 
 .. math::
 
@@ -15,12 +9,10 @@ The forward model is multiplicative, which is how photometry actually behaves:
     F_{\mathrm{ctl}}(t) &= B_{\mathrm{ctl}}(t)\,
         \bigl[1 + g_{\mathrm{ctl}} m(t)\bigr] + \epsilon_{\mathrm{ctl}}(t)
 
-where :math:`B` is a biexponential bleaching envelope, :math:`a(t)` is the true
-transient :math:`\Delta F/F`, and :math:`m(t)` is a shared unit-variance movement
-artefact entering both channels with different gains. Two consequences make this
-useful for testing: an ideal baseline correction recovers
-:math:`a(t) + g_{\mathrm{sig}} m(t)`, and an ideal motion correction on top of it
-recovers :math:`a(t)`.
+Here :math:`B` is bleaching, :math:`a(t)` is the true transient
+:math:`\Delta F/F`, and :math:`m(t)` is a shared unit-variance movement artefact.
+Ideal baseline correction recovers :math:`a(t) + g_{\mathrm{sig}}m(t)`; subsequent
+motion correction recovers :math:`a(t)`.
 """
 
 from __future__ import annotations
@@ -57,9 +49,7 @@ def transient_kernel(
 ) -> NDArray[np.float64]:
     r"""Unit-peak difference-of-exponentials kernel for one calcium transient.
 
-    Normalising to a peak of exactly 1 is what makes the amplitude parameter
-    elsewhere in this module mean "peak :math:`\Delta F/F`", so a test can assert
-    a recovered peak against the number it asked for.
+    Unit normalization makes amplitude parameters equal peak :math:`\Delta F/F`.
 
     Parameters
     ----------
@@ -154,21 +144,18 @@ def biexponential_bleach(
 class SyntheticTruth:
     r"""The hidden components of a synthetic recording.
 
-    Every array is on the same time base as the recording's traces, including
-    after simulated frame drops, so a test can compare element by element without
-    resampling anything.
+    All arrays share the recording's time base, including after simulated drops.
 
     Attributes
     ----------
     time
         Time base shared by all arrays here and by the recording's traces.
     transient_dff
-        The true transient :math:`\Delta F/F` in the signal channel. This is what
-        a perfect end-to-end pipeline should return.
+        True transient :math:`\Delta F/F` in the signal channel.
     motion
         Shared movement artefact, normalised to zero mean and unit variance.
     bleach_signal, bleach_control
-        The bleaching envelopes actually applied to each channel.
+        Bleaching envelopes applied to each channel.
     motion_gain_signal, motion_gain_control
         Gains with which ``motion`` entered each channel.
     transient_times, transient_amplitudes
@@ -196,8 +183,7 @@ class SyntheticTruth:
     def observable_dff(self) -> NDArray[np.float64]:
         """What a perfect baseline correction alone recovers.
 
-        Transients plus the movement artefact as it appears in the signal channel,
-        i.e. the target for a bleach-correction test before motion correction runs.
+        Transients plus movement artefact in the signal channel.
         """
         return np.asarray(self.transient_dff + self.motion_gain_signal * self.motion)
 
@@ -209,9 +195,9 @@ class SyntheticDataset:
     Attributes
     ----------
     recording
-        What a pipeline is allowed to see.
+        Generated recording.
     truth
-        What it is being judged against.
+        Hidden components used to generate it.
     """
 
     recording: Recording
@@ -237,9 +223,7 @@ def _make_time(
 ) -> NDArray[np.float64]:
     """Build a time vector, optionally with per-interval jitter.
 
-    Jitter is applied to the intervals and then accumulated, rather than added to
-    the timestamps directly, because that construction cannot produce a
-    non-increasing time vector no matter how large the jitter.
+    Jitter is applied to intervals and accumulated, preserving monotonicity.
     """
     if timestamp_jitter <= 0.0:
         return np.arange(n, dtype=np.float64) / fs
@@ -286,13 +270,10 @@ def synthetic_recording(
     duration
         Recording length in seconds.
     event_times
-        Times of an experimental event, in seconds. When given, a transient of
-        fixed amplitude is placed after each one and the events are attached to
-        the recording under the name ``"cue"``, which is what event-triggered
-        average tests align to. When ``None``, no events are attached.
+        Experimental event times in seconds. Each receives a fixed-amplitude
+        response, and the events are stored as ``"cue"``. ``None`` adds no events.
     event_response_amplitude
-        Peak :math:`\Delta F/F` of each event-locked transient. Fixed rather than
-        random so that the expected event-triggered average is known exactly.
+        Peak :math:`\Delta F/F` of each event-locked transient.
     event_response_latency
         Delay in seconds from event onset to transient onset.
     n_transients
@@ -308,11 +289,10 @@ def synthetic_recording(
         Total photobleaching decay as a fraction of baseline.
     bleach_tau_fast, bleach_tau_slow
         Bleaching time constants in seconds. The control channel gets slightly
-        different ones, as real channels do.
+        different values.
     motion_gain_signal, motion_gain_control
         How strongly the shared movement artefact enters each channel, in
-        :math:`\Delta F/F` units per standard deviation of motion. Deliberately
-        unequal, since a motion-correction step that assumes a gain of 1 is wrong.
+        :math:`\Delta F/F` units per standard deviation of motion.
     motion_timescale
         Smoothing timescale of the movement artefact, in seconds.
     noise_cv
@@ -327,8 +307,7 @@ def synthetic_recording(
     subject, session
         Identifiers stored on the recording.
     seed
-        Seed for the random generator. The default makes every call reproducible,
-        which is what a test suite needs.
+        Random seed.
 
     Returns
     -------
@@ -373,7 +352,6 @@ def synthetic_recording(
     rng = np.random.default_rng(seed)
     time = _make_time(fs=rate, n=n, timestamp_jitter=float(timestamp_jitter), rng=rng)
 
-    # --- transients ------------------------------------------------------
     kernel = transient_kernel(rate, tau_rise=tau_rise, tau_decay=tau_decay)
     onsets: list[float] = []
     amplitudes: list[float] = []
@@ -397,7 +375,6 @@ def synthetic_recording(
         stop = min(n, start + kernel.size)
         transient_dff[start:stop] += amp * kernel[: stop - start]
 
-    # --- movement artefact -----------------------------------------------
     walk = np.cumsum(rng.standard_normal(n))
     sigma_samples = max(float(motion_timescale) * rate, 1e-6)
     motion = gaussian_filter1d(walk, sigma_samples, mode="nearest")
@@ -406,7 +383,6 @@ def synthetic_recording(
     if scale > 0.0:
         motion = motion / scale
 
-    # --- bleaching, noise, and the observed traces -----------------------
     bleach_signal = biexponential_bleach(
         time,
         baseline=baseline_signal,
@@ -431,7 +407,6 @@ def synthetic_recording(
         1.0 + float(motion_gain_control) * motion
     ) + noise_sd_control * rng.standard_normal(n)
 
-    # --- simulated frame drops -------------------------------------------
     keep = np.ones(n, dtype=bool)
     if dropped_fraction > 0.0:
         keep = rng.random(n) >= float(dropped_fraction)
@@ -446,7 +421,6 @@ def synthetic_recording(
     signal_f = signal_f[keep]
     control_f = control_f[keep]
 
-    # --- assemble ---------------------------------------------------------
     params: dict[str, Any] = {
         "fs": rate,
         "duration": span,

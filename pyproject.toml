@@ -58,12 +58,11 @@ dev = [
     "pandas-stubs>=2.1",
 ]
 
-# ---------------------------------------------------------------- testing ----
+# Testing
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-# `src` is on the list so that every docstring example is executed as a test.
-# Documentation that is never run is documentation that is eventually wrong.
+# Include ``src`` so doctest examples run in CI.
 testpaths = ["tests", "src"]
 addopts = [
     "-ra",
@@ -73,7 +72,6 @@ addopts = [
     "--doctest-modules",
 ]
 xfail_strict = true
-# A warning in a numerics library is usually a bug in disguise.
 filterwarnings = ["error"]
 markers = [
     "slow: deselect with '-m \"not slow\"'",
@@ -85,9 +83,7 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
-# The core model landed at 100% of statements. The floor sits below that on
-# purpose: it should catch a real regression, not fail the build because a new
-# module arrived a few lines short mid-branch.
+# Leave room for new modules without masking substantial regressions.
 fail_under = 95
 exclude_also = [
     "if TYPE_CHECKING:",
@@ -95,7 +91,7 @@ exclude_also = [
     "@overload",
 ]
 
-# ---------------------------------------------------------------- linting ----
+# Linting
 
 [tool.ruff]
 line-length = 100
@@ -121,8 +117,7 @@ select = [
 ]
 ignore = [
     "D107",  # __init__ docstring lives on the class
-    # Properties and attributes take noun-phrase docstrings under the numpydoc
-    # convention ("Number of samples."), which D401 misreads as non-imperative.
+    # Noun-phrase property docstrings conflict with D401.
     "D401",
     "E741",  # `l` is a legitimate name in penalized-least-squares math
 ]
@@ -134,31 +129,20 @@ convention = "numpy"
 "tests/**" = ["D"]
 "**/__init__.py" = ["D104"]
 
-# ------------------------------------------------------------ type checking --
+# Type checking
 
 [tool.mypy]
-# No `python_version` pin: numpy's own stubs use 3.12+ syntax, so pinning to 3.11
-# makes mypy fail parsing them. Ruff enforces 3.11 language compatibility from
-# `requires-python`, and the CI matrix actually runs the tests on 3.11.
+# NumPy stubs use 3.12+ syntax, so do not pin mypy to Python 3.11.
 files = ["src", "tests"]
 strict = true
 enable_error_code = ["ignore-without-code", "truthy-bool"]
-# `warn_unreachable` and `redundant-expr` are deliberately NOT enabled. Both assume
-# every caller is type-checked. FluoroFlow's primary caller is a Jupyter notebook,
-# so the `isinstance` guards at each public boundary are load-bearing: they turn a
-# wrong argument into a sentence instead of a broadcasting mystery forty lines
-# later. mypy reads those guards as dead code, and it is wrong about who is calling.
+# Runtime guards serve untyped notebook callers, despite appearing redundant to mypy.
 
 [[tool.mypy.overrides]]
 module = ["scipy.*"]
 ignore_missing_imports = true
 
-# The array-taking constructors accept anything `np.asarray` can turn into a 1-D
-# float array and coerce it in `__post_init__`. A dataclass field has one
-# annotation for both the parameter and the attribute, and the attribute type
-# (`NDArray[float64]`) is the one worth having, since preprocessing reads it
-# constantly. Tests exercise the documented list-passing form, so `arg-type` is
-# relaxed there and nowhere else; `src` stays fully strict.
+# Tests exercise array-like constructor inputs; source code remains fully strict.
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disable_error_code = ["arg-type"]

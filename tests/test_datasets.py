@@ -1,9 +1,4 @@
-"""Tests for the synthetic data generator.
-
-The generator is test infrastructure, so it needs testing harder than the code it
-supports: a silently wrong forward model would make every downstream recovery
-test agree with itself and be wrong together.
-"""
+"""Tests for the synthetic data generator."""
 
 from __future__ import annotations
 
@@ -21,8 +16,6 @@ from fluoroflow.exceptions import ValidationError
 
 class TestTransientKernel:
     def test_peaks_at_exactly_one(self) -> None:
-        # Amplitude parameters elsewhere are documented as peak dF/F, which is only
-        # true if the kernel peak is exactly 1.
         assert transient_kernel(100.0).max() == pytest.approx(1.0)
 
     def test_starts_at_zero_and_is_causal(self) -> None:
@@ -38,9 +31,6 @@ class TestTransientKernel:
         assert np.all(np.diff(k[peak:]) < 0)
 
     def test_peak_latency_matches_the_analytic_value(self) -> None:
-        # For a difference of exponentials the peak sits at
-        # t = ln(td/tr) / (1/tr - 1/td), which is a closed form worth checking
-        # against rather than trusting the array.
         rise, decay, fs = 0.08, 0.60, 500.0
         expected = np.log(decay / rise) / (1.0 / rise - 1.0 / decay)
         k = transient_kernel(fs, tau_rise=rise, tau_decay=decay)
@@ -83,8 +73,6 @@ class TestBiexponentialBleach:
         assert envelope[-1] == pytest.approx(1000.0, rel=1e-3)
 
     def test_is_invariant_to_the_time_origin(self) -> None:
-        # The envelope is defined relative to the first sample, so shifting the
-        # clock must not change the curve.
         time = np.arange(100) / 30.0
         kwargs = {"baseline": 1000.0, "amplitude": 0.2, "tau_fast": 5.0, "tau_slow": 50.0}
         np.testing.assert_allclose(
@@ -106,8 +94,6 @@ class TestBiexponentialBleach:
 
 class TestForwardModel:
     def test_dividing_out_the_true_bleach_recovers_the_true_dff_exactly(self) -> None:
-        # This is the contract every downstream recovery test leans on. With no
-        # noise it must hold to floating-point precision, not approximately.
         data = synthetic_recording(duration=60.0, noise_cv=0.0, seed=1)
         recovered = data.signal.values / data.truth.bleach_signal - 1.0
         np.testing.assert_allclose(recovered, data.truth.observable_dff, atol=1e-12)
@@ -210,8 +196,6 @@ class TestRecordingShape:
         assert synthetic_recording(duration=60.0, fs=45.0).signal.fs == pytest.approx(45.0)
 
     def test_traces_carry_no_processing_history(self) -> None:
-        # Synthetic data is raw data. A generator that pre-labelled its output as
-        # processed would let a pipeline's provenance guards pass vacuously.
         assert synthetic_recording(duration=10.0).signal.history == ()
 
 
@@ -228,8 +212,6 @@ class TestAcquisitionArtefacts:
         assert np.all(np.diff(time) > 0)
 
     def test_the_median_rate_survives_heavy_frame_loss(self) -> None:
-        # The median interval is the reason for this: a fifth of the frames gone
-        # and the reported rate is still the true per-frame rate.
         data = synthetic_recording(duration=300.0, fs=30.0, dropped_fraction=0.2, seed=10)
         assert data.signal.fs == pytest.approx(30.0, rel=1e-9)
 
