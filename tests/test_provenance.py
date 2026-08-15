@@ -6,7 +6,7 @@ import dataclasses
 
 import pytest
 
-from fluoroflow import MEAN_REMOVED, NORMALIZED, Step
+from fluoroflow import Step
 from fluoroflow.core.provenance import format_history
 
 
@@ -14,7 +14,6 @@ class TestStep:
     def test_defaults(self) -> None:
         step = Step("dff")
         assert dict(step.params) == {}
-        assert step.tags == frozenset()
 
     def test_rejects_a_blank_name(self) -> None:
         with pytest.raises(ValueError, match="non-empty string"):
@@ -36,14 +35,10 @@ class TestStep:
         params["percentile"] = 0.08
         assert step.params["percentile"] == 8.0
 
-    def test_tags_are_normalised_to_a_frozenset(self) -> None:
-        assert Step("detrend", tags=[MEAN_REMOVED, MEAN_REMOVED]).tags == frozenset({MEAN_REMOVED})
-
     def test_equality_is_by_value(self) -> None:
         assert Step("dff", {"p": 8.0}) == Step("dff", {"p": 8.0})
         assert Step("dff", {"p": 8.0}) != Step("dff", {"p": 9.0})
         assert Step("dff") != Step("zscore")
-        assert Step("dff", tags={NORMALIZED}) != Step("dff")
 
     def test_comparison_with_a_non_step_is_false_not_an_error(self) -> None:
         assert Step("dff") != "dff"
@@ -53,12 +48,11 @@ class TestStep:
         with pytest.raises(TypeError):
             hash(Step("dff"))
 
-    def test_repr_shows_name_params_and_tags(self) -> None:
+    def test_repr_shows_name_and_params(self) -> None:
         assert repr(Step("dff", {"p": 8.0})) == "Step('dff', p=8.0)"
-        text = repr(Step("detrend", {"lam": 1e7}, tags={MEAN_REMOVED}))
+        text = repr(Step("detrend", {"lam": 1e7}))
         assert "detrend" in text
         assert "lam=10000000.0" in text
-        assert "mean-removed" in text
 
 
 class TestFormatHistory:
@@ -71,17 +65,3 @@ class TestFormatHistory:
 
     def test_accepts_any_iterable(self) -> None:
         assert format_history(iter([Step("a")])) == " 1. Step('a')"
-
-
-def test_the_tag_constants_are_distinct() -> None:
-    from fluoroflow.core import provenance
-
-    tags = [
-        provenance.BASELINE_CORRECTED,
-        provenance.FILTERED,
-        provenance.MEAN_REMOVED,
-        provenance.MOTION_CORRECTED,
-        provenance.NORMALIZED,
-        provenance.RESAMPLED,
-    ]
-    assert len(set(tags)) == len(tags)

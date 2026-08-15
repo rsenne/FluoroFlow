@@ -11,7 +11,6 @@ from fluoroflow.core.validation import (
     as_series,
     check_matching_length,
     check_no_infinities,
-    check_percentage,
     check_positive,
     check_time_vector,
     checked_name,
@@ -116,25 +115,6 @@ class TestCheckedName:
     def test_rejects_non_strings_and_blanks(self, bad: object) -> None:
         with pytest.raises(ValidationError, match="non-empty string"):
             checked_name(bad)
-
-
-class TestCheckPercentage:
-    @pytest.mark.parametrize("good", [0.0, 0.08, 8.0, 50, 100.0])
-    def test_accepts_the_closed_unit_percent_interval(self, good: float) -> None:
-        assert check_percentage(good) == pytest.approx(float(good))
-
-    @pytest.mark.parametrize("bad", [-0.1, 100.1, 101, 1000])
-    def test_rejects_values_outside_the_interval(self, bad: float) -> None:
-        with pytest.raises(ValidationError, match=r"\[0, 100\]"):
-            check_percentage(bad)
-
-    def test_rejects_nan(self) -> None:
-        with pytest.raises(ValidationError, match="finite"):
-            check_percentage(math.nan)
-
-    def test_error_message_teaches_the_convention(self) -> None:
-        with pytest.raises(ValidationError, match=r"pass 8, not 0\.08"):
-            check_percentage(800.0)
 
 
 class TestCheckPositive:

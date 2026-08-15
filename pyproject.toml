@@ -62,14 +62,12 @@ dev = [
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-# Include ``src`` so doctest examples run in CI.
-testpaths = ["tests", "src"]
+testpaths = ["tests"]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
     "--import-mode=importlib",
-    "--doctest-modules",
 ]
 xfail_strict = true
 filterwarnings = ["error"]

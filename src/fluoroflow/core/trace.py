@@ -31,21 +31,7 @@ __all__ = ["SamplingReport", "Trace"]
 
 @dataclass(frozen=True, slots=True)
 class SamplingReport:
-    """Summary of a trace's sampling regularity.
-
-    Attributes
-    ----------
-    dt_median
-        Median sample interval, in seconds.
-    dt_min, dt_max
-        Extremes of the observed sample intervals, in seconds.
-    cv
-        Coefficient of variation of the sample intervals.
-    n_gaps
-        Number of intervals longer than 1.5 times the median.
-    n_samples
-        Length of the trace.
-    """
+    """Summary of a trace's sampling regularity."""
 
     dt_median: float
     dt_min: float
@@ -56,62 +42,13 @@ class SamplingReport:
 
     @property
     def is_uniform(self) -> bool:
-        """Whether the sampling is regular enough to treat as uniform.
-
-        True when there are no gaps and the interval CV is below 1 percent.
-        """
+        """Whether sampling is regular enough to treat as uniform."""
         return self.n_gaps == 0 and self.cv < 0.01
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class Trace:
-    """An immutable fluorescence time series with its own time base and history.
-
-    Parameters
-    ----------
-    time
-        Sample times in seconds. Must be finite and strictly increasing. Whether
-        it starts at zero or at the rig's wall clock is up to you; FluoroFlow
-        never assumes.
-    values
-        Fluorescence values, same length as ``time``. NaN is permitted and means
-        "missing"; infinities are rejected.
-    name
-        Identifier for this trace, e.g. ``"Region0G"``.
-    units
-        Free-text units, e.g. ``"a.u."``, ``"dF/F"``, or ``"z"``.
-    meta
-        Arbitrary metadata. Copied defensively and exposed read-only.
-    history
-        Ordered :class:`~fluoroflow.core.provenance.Step` records describing what
-        has been done to these values.
-
-    Raises
-    ------
-    ValidationError
-        If the arrays are not one-dimensional, are of unequal length, if ``time``
-        is not finite and strictly increasing, or if ``values`` contains an
-        infinity.
-
-    Notes
-    -----
-    Instances are frozen and arrays are non-writeable. Transforms return a new
-    trace via :meth:`derive`.
-
-    Traces compare by value and are unhashable.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from fluoroflow import Trace
-    >>> t = Trace(np.arange(5) / 10.0, [1.0, 1.1, 0.9, 1.2, 1.0], name="Region0G")
-    >>> round(t.fs, 6)
-    10.0
-    >>> len(t)
-    5
-    >>> t.values.flags.writeable
-    False
-    """
+    """An immutable fluorescence time series with its own time base and history."""
 
     time: NDArray[np.float64]
     values: NDArray[np.float64]
@@ -154,27 +91,7 @@ class Trace:
         units: str = "a.u.",
         meta: Mapping[str, Any] | None = None,
     ) -> Trace:
-        """Build a trace from values sampled at a known constant rate.
-
-        Prefer the normal constructor when real timestamps are available; a
-        reconstructed time base cannot represent dropped frames.
-
-        Parameters
-        ----------
-        values
-            Fluorescence values.
-        fs
-            Sampling rate in hertz. Must be finite and positive.
-        t0
-            Time of the first sample, in seconds.
-        name, units, meta
-            As in the constructor.
-
-        Returns
-        -------
-        Trace
-            A trace whose time vector is ``t0 + arange(n) / fs``.
-        """
+        """Build a trace from values sampled at a known constant rate."""
         rate = check_positive(fs, label="fs")
         arr = as_series(values, label="values")
         time = float(t0) + np.arange(arr.size, dtype=np.float64) / rate
@@ -191,13 +108,7 @@ class Trace:
 
     @property
     def dt(self) -> float:
-        """Median sample interval in seconds.
-
-        Raises
-        ------
-        InsufficientSamplesError
-            If the trace has fewer than two samples, where no interval exists.
-        """
+        """Median sample interval in seconds."""
         if math.isnan(self._dt):
             msg = (
                 f"Trace {self.name!r} has {len(self)} sample(s); at least 2 are needed "
@@ -208,24 +119,12 @@ class Trace:
 
     @property
     def fs(self) -> float:
-        """Sampling rate in hertz, derived from this trace's own timestamps.
-
-        Raises
-        ------
-        InsufficientSamplesError
-            If the trace has fewer than two samples.
-        """
+        """Sampling rate in hertz, derived from this trace's own timestamps."""
         return 1.0 / self.dt
 
     @property
     def t0(self) -> float:
-        """Time of the first sample, in seconds.
-
-        Raises
-        ------
-        InsufficientSamplesError
-            If the trace is empty.
-        """
+        """Time of the first sample, in seconds."""
         if not len(self):
             msg = f"Trace {self.name!r} is empty and has no start time."
             raise InsufficientSamplesError(msg)
@@ -233,16 +132,7 @@ class Trace:
 
     @property
     def duration(self) -> float:
-        """Elapsed time from the first to the last sample, in seconds.
-
-        Note this is one sample interval shorter than the recorded span; it is
-        ``time[-1] - time[0]``, not ``n / fs``.
-
-        Raises
-        ------
-        InsufficientSamplesError
-            If the trace is empty.
-        """
+        """Elapsed time from the first to the last sample, in seconds."""
         if not len(self):
             msg = f"Trace {self.name!r} is empty and has no duration."
             raise InsufficientSamplesError(msg)
@@ -255,13 +145,7 @@ class Trace:
 
     @property
     def sampling(self) -> SamplingReport:
-        """Regularity statistics for this trace's time base.
-
-        Raises
-        ------
-        InsufficientSamplesError
-            If the trace has fewer than two samples.
-        """
+        """Regularity statistics for this trace's time base."""
         if math.isnan(self._dt):
             msg = (
                 f"Trace {self.name!r} has {len(self)} sample(s); at least 2 are needed "
@@ -280,44 +164,12 @@ class Trace:
             n_samples=len(self),
         )
 
-    def has_tag(self, tag: str) -> bool:
-        """Whether any recorded step carries ``tag``.
-
-        Parameters
-        ----------
-        tag
-            Tag to look for, e.g. :data:`~fluoroflow.core.provenance.MEAN_REMOVED`.
-
-        Returns
-        -------
-        bool
-            True if at least one step in the history carries the tag.
-        """
-        return any(tag in step.tags for step in self.history)
-
     def has_step(self, name: str) -> bool:
-        """Whether an operation named ``name`` appears in the history.
-
-        Parameters
-        ----------
-        name
-            Step name to look for.
-
-        Returns
-        -------
-        bool
-            True if at least one step has that name.
-        """
+        """Whether an operation named ``name`` appears in the history."""
         return any(step.name == name for step in self.history)
 
     def describe_history(self) -> str:
-        """Render the processing history as a numbered, human-readable list.
-
-        Returns
-        -------
-        str
-            One line per step, or ``"<no processing>"`` if nothing was applied.
-        """
+        """Render the processing history as a numbered, human-readable list."""
         return format_history(self.history)
 
     def derive(
@@ -330,42 +182,7 @@ class Trace:
         units: str | None = None,
         meta: Mapping[str, Any] | None = None,
     ) -> Trace:
-        """Return a new trace descended from this one, with ``step`` appended.
-
-        Unspecified fields are inherited. ``step`` is required so every
-        transformation records its provenance.
-
-        Parameters
-        ----------
-        step
-            Record of the operation being applied.
-        values
-            New values. Defaults to the current values, which is what a
-            metadata-only or tagging step wants.
-        time
-            New time vector, for operations that change the time base such as
-            resampling or cropping. Defaults to the current time vector.
-        name, units
-            Overrides for the corresponding fields.
-        meta
-            Metadata to merge into (not replace) the existing metadata.
-
-        Returns
-        -------
-        Trace
-            The derived trace.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from fluoroflow import Step, Trace
-        >>> t = Trace(np.arange(4) / 4.0, [1.0, 2.0, 3.0, 4.0])
-        >>> doubled = t.derive(values=t.values * 2, step=Step("double", {"by": 2}))
-        >>> doubled.values
-        array([2., 4., 6., 8.])
-        >>> doubled.describe_history()
-        " 1. Step('double', by=2)"
-        """
+        """Return a new trace descended from this one, with ``step`` appended."""
         if not isinstance(step, Step):
             msg = f"step must be a Step, got {type(step).__name__}."
             raise ValidationError(msg)
@@ -382,20 +199,7 @@ class Trace:
         )
 
     def rename(self, name: str) -> Trace:
-        """Return a copy under a new name, leaving the history untouched.
-
-        Renaming is not a transformation of the data, so it records no step.
-
-        Parameters
-        ----------
-        name
-            The new name.
-
-        Returns
-        -------
-        Trace
-            A trace identical except for its name.
-        """
+        """Return a copy under a new name, leaving the history untouched."""
         return Trace(
             time=self.time,
             values=self.values,
@@ -406,27 +210,7 @@ class Trace:
         )
 
     def time_slice(self, start: float | None = None, stop: float | None = None) -> Trace:
-        """Return the half-open time window ``[start, stop)`` as a new trace.
-
-        The recorded step includes the number of samples dropped from each end.
-
-        Parameters
-        ----------
-        start
-            Inclusive lower bound in seconds. ``None`` means the beginning.
-        stop
-            Exclusive upper bound in seconds. ``None`` means the end.
-
-        Returns
-        -------
-        Trace
-            The cropped trace, possibly empty.
-
-        Raises
-        ------
-        ValidationError
-            If ``start`` is not less than ``stop``.
-        """
+        """Return the half-open time window ``[start, stop)`` as a new trace."""
         lo = -math.inf if start is None else float(start)
         hi = math.inf if stop is None else float(stop)
         if not lo < hi:
@@ -456,23 +240,7 @@ class Trace:
         )
 
     def index_at(self, t: float) -> int:
-        """Index of the sample nearest in time to ``t``.
-
-        Parameters
-        ----------
-        t
-            Target time in seconds.
-
-        Returns
-        -------
-        int
-            Index of the closest sample. Ties resolve to the earlier sample.
-
-        Raises
-        ------
-        InsufficientSamplesError
-            If the trace is empty.
-        """
+        """Index of the sample nearest in time to ``t``."""
         if not len(self):
             msg = f"Trace {self.name!r} is empty; no sample to index."
             raise InsufficientSamplesError(msg)
@@ -487,23 +255,13 @@ class Trace:
         return right
 
     def to_frame(self) -> pd.DataFrame:
-        """Return the trace as a two-column :class:`pandas.DataFrame`.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns ``time`` and the trace's name. The frame owns writeable
-            copies, so editing it cannot corrupt the trace.
-        """
+        """Return the trace as a two-column :class:`pandas.DataFrame`."""
         import pandas as pd
 
         return pd.DataFrame({"time": np.asarray(self.time).copy(), self.name: self.values.copy()})
 
     def __eq__(self, other: object) -> bool:
-        """Compare two traces by value, treating NaN in the same slot as equal.
-
-        Return :data:`NotImplemented` for other types.
-        """
+        """Compare two traces by value, treating NaN in the same slot as equal."""
         if not isinstance(other, Trace):
             return NotImplemented
         return (

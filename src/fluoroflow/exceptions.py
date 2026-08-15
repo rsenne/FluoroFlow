@@ -5,7 +5,6 @@ from __future__ import annotations
 __all__ = [
     "FluoroFlowError",
     "InsufficientSamplesError",
-    "ProvenanceError",
     "ValidationError",
 ]
 
@@ -20,7 +19,3 @@ class ValidationError(FluoroFlowError, ValueError):
 
 class InsufficientSamplesError(ValidationError):
     """An operation needs more samples than the data contains."""
-
-
-class ProvenanceError(FluoroFlowError, RuntimeError):
-    """An operation conflicts with the data's processing history."""

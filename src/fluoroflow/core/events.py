@@ -30,22 +30,7 @@ _EPS = float(np.finfo(np.float64).eps)
 
 
 def _boundary_tolerance(grid: NDArray[np.float64]) -> float:
-    """How close to a timestamp an epoch boundary must land to count as touching it.
-
-    Reconstructing an offset as ``onset + duration`` introduces error that scales
-    with timestamp magnitude. The tolerance is capped at a quarter sample so it
-    cannot absorb a real boundary.
-
-    Parameters
-    ----------
-    grid
-        Timestamps the epochs are being rendered onto, already validated.
-
-    Returns
-    -------
-    float
-        Absolute tolerance in seconds, or ``0.0`` when no interval exists.
-    """
+    """How close to a timestamp an epoch boundary must land to count as touching it."""
     step = median_dt(grid)
     if math.isnan(step):
         return 0.0
@@ -55,39 +40,7 @@ def _boundary_tolerance(grid: NDArray[np.float64]) -> float:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class Events:
-    """An immutable set of event onsets, optionally with durations and labels.
-
-    Parameters
-    ----------
-    times
-        Onset times in seconds, finite and non-decreasing. Simultaneous events are
-        allowed; out-of-order ones are not.
-    name
-        Identifier, e.g. ``"shock"`` or ``"freezing"``.
-    durations
-        Optional durations in seconds, one per event, finite and non-negative. An
-        events object with durations describes epochs; without them it describes
-        instants.
-    labels
-        Optional per-event label, one per event, for heterogeneous event sets.
-    meta
-        Arbitrary metadata. Copied defensively and exposed read-only.
-
-    Raises
-    ------
-    ValidationError
-        If ``times`` is not finite and non-decreasing, or if ``durations`` or
-        ``labels`` has the wrong length, or if any duration is negative.
-
-    Examples
-    --------
-    >>> from fluoroflow import Events
-    >>> ev = Events([1.0, 5.0, 9.5], name="tone")
-    >>> len(ev)
-    3
-    >>> ev.within(2.0, 10.0).times
-    array([5. , 9.5])
-    """
+    """An immutable set of event onsets, optionally with durations and labels."""
 
     times: NDArray[np.float64]
     name: str = "events"
@@ -155,47 +108,8 @@ class Events:
 
         Each contiguous run of True becomes one epoch. The onset is the timestamp
         of the run's first True sample, and the epoch ends at the timestamp of the
-        first following False sample, so an epoch's duration covers its samples.
-        A run that reaches the end of the recording is
+        first following False sample. A run reaching the end of the recording is
         closed off one median sample interval after the final sample.
-
-        Parameters
-        ----------
-        mask
-            Per-sample boolean or 0/1 state, where True means the behaviour or
-            state is present.
-        time
-            Timestamps for ``mask``, same length, finite and increasing.
-        name
-            Identifier for the resulting events.
-        meta
-            Arbitrary metadata.
-
-        Returns
-        -------
-        Events
-            Epochs with durations, one per contiguous run of True.
-
-        Raises
-        ------
-        ValidationError
-            If ``mask`` and ``time`` differ in length.
-        InsufficientSamplesError
-            If ``mask`` contains a True sample but ``time`` is too short to
-            establish a sample interval, since the epoch's width would have to be
-            invented.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from fluoroflow import Events
-        >>> t = np.arange(8) * 0.5
-        >>> m = [False, True, True, False, False, True, False, False]
-        >>> ev = Events.from_boolean(m, t, name="freezing")
-        >>> ev.times
-        array([0.5, 2.5])
-        >>> ev.durations
-        array([1. , 0.5])
         """
         times_arr = as_series(time, label="time")
         check_time_vector(times_arr)
@@ -228,8 +142,6 @@ class Events:
             )
             raise InsufficientSamplesError(msg)
 
-        # A terminal run has no following False sample; close it one interval
-        # after the final timestamp.
         n = times_arr.size
         last_edge = float(times_arr[-1]) + step
         onset = times_arr[starts]
@@ -257,13 +169,7 @@ class Events:
 
     @property
     def offsets(self) -> NDArray[np.float64]:
-        """End time of each epoch, in seconds.
-
-        Raises
-        ------
-        ValidationError
-            If no durations are attached, since instants have no end.
-        """
+        """End time of each epoch, in seconds."""
         if self.durations is None:
             msg = (
                 f"Events {self.name!r} has no durations, so it has no offsets. "
@@ -275,13 +181,7 @@ class Events:
 
     @property
     def total_duration(self) -> float:
-        """Summed duration of all epochs, in seconds.
-
-        Raises
-        ------
-        ValidationError
-            If no durations are attached.
-        """
+        """Summed duration of all epochs, in seconds."""
         if self.durations is None:
             msg = f"Events {self.name!r} has no durations to total."
             raise ValidationError(msg)
@@ -299,27 +199,7 @@ class Events:
         )
 
     def within(self, start: float | None = None, stop: float | None = None) -> Events:
-        """Return the events whose onset lies in the half-open window ``[start, stop)``.
-
-        Selection uses onset only; durations are never truncated.
-
-        Parameters
-        ----------
-        start
-            Inclusive lower bound in seconds. ``None`` means unbounded.
-        stop
-            Exclusive upper bound in seconds. ``None`` means unbounded.
-
-        Returns
-        -------
-        Events
-            The selected subset.
-
-        Raises
-        ------
-        ValidationError
-            If ``start`` is not less than ``stop``.
-        """
+        """Return the events whose onset lies in the half-open window ``[start, stop)``."""
         lo = -math.inf if start is None else float(start)
         hi = math.inf if stop is None else float(stop)
         if not lo < hi:
@@ -328,23 +208,7 @@ class Events:
         return self._subset((self.times >= lo) & (self.times < hi))
 
     def with_label(self, label: str) -> Events:
-        """Return only the events carrying ``label``.
-
-        Parameters
-        ----------
-        label
-            Label to match exactly.
-
-        Returns
-        -------
-        Events
-            The matching subset.
-
-        Raises
-        ------
-        ValidationError
-            If this event set has no labels.
-        """
+        """Return only the events carrying ``label``."""
         if self.labels is None:
             msg = f"Events {self.name!r} has no labels to filter on."
             raise ValidationError(msg)
@@ -352,20 +216,7 @@ class Events:
         return self._subset(keep, name=f"{self.name}[{label}]")
 
     def shift(self, delta: float) -> Events:
-        """Return a copy with every onset moved by ``delta`` seconds.
-
-        Durations are unchanged.
-
-        Parameters
-        ----------
-        delta
-            Offset in seconds, positive to move later.
-
-        Returns
-        -------
-        Events
-            The shifted events.
-        """
+        """Return a copy with every onset moved by ``delta`` seconds."""
         return Events(
             times=self.times + float(delta),
             name=self.name,
@@ -375,27 +226,7 @@ class Events:
         )
 
     def to_boolean(self, time: Any) -> NDArray[np.bool_]:
-        """Render the epochs as a per-sample boolean vector on ``time``.
-
-        A sample is True when it falls in ``[onset, offset)`` of any epoch.
-        Boundaries use a small floating-point tolerance; see
-        :func:`_boundary_tolerance`.
-
-        Parameters
-        ----------
-        time
-            Timestamps to evaluate on.
-
-        Returns
-        -------
-        numpy.ndarray
-            Boolean array the same length as ``time``.
-
-        Raises
-        ------
-        ValidationError
-            If no durations are attached, since instants cover no samples.
-        """
+        """Render the epochs as a per-sample boolean vector on ``time``."""
         if self.durations is None:
             msg = (
                 f"Events {self.name!r} has no durations, so it cannot be rendered as a "
@@ -413,14 +244,7 @@ class Events:
         return out
 
     def to_frame(self) -> pd.DataFrame:
-        """Return the events as a :class:`pandas.DataFrame`.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Column ``onset``, plus ``duration`` and ``offset`` when durations are
-            attached, plus ``label`` when labels are attached.
-        """
+        """Return the events as a :class:`pandas.DataFrame`."""
         import pandas as pd
 
         data: dict[str, Any] = {"onset": self.times.copy()}

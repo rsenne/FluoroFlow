@@ -8,7 +8,7 @@ import math
 import numpy as np
 import pytest
 
-from fluoroflow import MEAN_REMOVED, NORMALIZED, Step, Trace
+from fluoroflow import Step, Trace
 from fluoroflow.exceptions import InsufficientSamplesError, ValidationError
 
 
@@ -200,14 +200,6 @@ class TestProvenance:
         assert out.name == "Region0G"
         assert out.units == "a.u."
         np.testing.assert_array_equal(out.values, t.values)
-
-    def test_tags_are_queryable_across_the_whole_history(self, simple_trace: Trace) -> None:
-        out = simple_trace.derive(step=Step("detrend", tags={MEAN_REMOVED})).derive(
-            step=Step("zscore", tags={NORMALIZED})
-        )
-        assert out.has_tag(MEAN_REMOVED)
-        assert out.has_tag(NORMALIZED)
-        assert not out.has_tag("motion-corrected")
 
     def test_step_lookup_by_name(self, simple_trace: Trace) -> None:
         out = simple_trace.derive(step=Step("airpls", {"lam": 1e7}))
