@@ -239,6 +239,31 @@ class Trace:
             ),
         )
 
+    def interpolate_to(self, time: Any) -> Trace:
+        """Linearly interpolate onto new timestamps.
+
+        The target may extend up to one sample interval beyond this trace's own
+        span -- the maximum possible clock offset between two channels
+        multiplexed from the same acquisition -- and those points are clamped to
+        the nearest boundary value. A target further out is rejected.
+        """
+        target = as_series(time, label="time")
+        check_time_vector(target)
+        dt = self.dt
+        if target.size and (target[0] < self.time[0] - dt or target[-1] > self.time[-1] + dt):
+            msg = (
+                f"Trace {self.name!r} spans [{self.time[0]!r}, {self.time[-1]!r}] s; the "
+                f"requested timestamps reach [{target[0]!r}, {target[-1]!r}] s, more than "
+                f"one sample interval ({dt!r} s) outside that range."
+            )
+            raise ValidationError(msg)
+        values = np.interp(target, self.time, self.values)
+        return self.derive(
+            time=target,
+            values=values,
+            step=Step("interpolate_to", {"n_target": int(target.size)}),
+        )
+
     def index_at(self, t: float) -> int:
         """Index of the sample nearest in time to ``t``."""
         if not len(self):

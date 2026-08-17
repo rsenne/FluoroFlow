@@ -49,11 +49,18 @@ class TestFitIsosbesticBaseline:
         assert baseline.name == "Region0G_baseline"
         assert baseline.units == "a.u."
 
-    def test_rejects_a_length_mismatch(self) -> None:
-        iso = Trace(np.arange(10) / 10.0, np.zeros(10), name="iso")
-        signal = Trace(np.arange(5) / 10.0, np.zeros(5), name="sig")
-        with pytest.raises(ValidationError, match="frame-aligned"):
-            fit_isosbestic_baseline(signal, iso)
+    def test_interpolates_an_offset_isosbestic_onto_the_signals_own_clock(self) -> None:
+        # Simulate interleaved acquisition: the isosbestic's clock is offset from the
+        # signal's, and padded well beyond it so no boundary clamping is exercised here.
+        signal_time = np.arange(20) / 10.0
+        iso_time = np.arange(-5, 25) / 10.0 + 0.02
+        iso_values = 2.0 * iso_time + 1.0
+        true_baseline = 3.0 * (2.0 * signal_time + 1.0) + 5.0
+
+        iso = Trace(iso_time, iso_values, name="iso")
+        signal = Trace(signal_time, true_baseline, name="sig")
+        baseline = fit_isosbestic_baseline(signal, iso)
+        np.testing.assert_allclose(baseline.values, true_baseline, atol=1e-8)
 
     def test_rejects_missing_samples(self) -> None:
         iso = Trace(np.arange(10) / 10.0, np.zeros(10), name="iso")

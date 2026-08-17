@@ -249,6 +249,50 @@ class TestTimeSlice:
             t.time_slice(0.5, 0.2)
 
 
+class TestInterpolateTo:
+    def test_recovers_a_linear_function_exactly(self) -> None:
+        time = np.arange(10) / 10.0
+        source = Trace(time, 3.0 * time + 1.0, name="s")
+        target = np.array([0.05, 0.15, 0.25, 0.35])
+        out = source.interpolate_to(target)
+        np.testing.assert_allclose(out.values, 3.0 * target + 1.0, atol=1e-12)
+        np.testing.assert_array_equal(out.time, target)
+
+    def test_clamps_within_one_sample_interval(self) -> None:
+        source = Trace(np.arange(10) / 10.0, np.arange(10, dtype=float))
+        out = source.interpolate_to(np.array([-0.05, 0.0, 0.9, 0.95]))
+        np.testing.assert_allclose(out.values, [0.0, 0.0, 9.0, 9.0])
+
+    def test_rejects_a_target_further_than_one_sample_interval_away(self) -> None:
+        source = Trace(np.arange(10) / 10.0, np.arange(10, dtype=float))
+        with pytest.raises(ValidationError, match="outside that range"):
+            source.interpolate_to(np.array([-0.5, 0.5]))
+
+    def test_records_a_step(self) -> None:
+        source = Trace(np.arange(5) / 10.0, np.arange(5, dtype=float))
+        out = source.interpolate_to(np.array([0.05, 0.15]))
+        assert out.history[-1].params == {"n_target": 2}
+
+    def test_preserves_name_units_and_meta(self) -> None:
+        source = Trace(
+            np.arange(5) / 10.0, np.arange(5, dtype=float), name="s", units="a.u.", meta={"k": 1}
+        )
+        out = source.interpolate_to(np.array([0.05]))
+        assert out.name == "s"
+        assert out.units == "a.u."
+        assert dict(out.meta) == {"k": 1}
+
+    def test_empty_target_yields_an_empty_trace(self) -> None:
+        source = Trace(np.arange(5) / 10.0, np.arange(5, dtype=float))
+        out = source.interpolate_to(np.array([]))
+        assert len(out) == 0
+
+    def test_too_few_source_samples_raises(self) -> None:
+        source = Trace([0.0], [1.0])
+        with pytest.raises(InsufficientSamplesError):
+            source.interpolate_to(np.array([0.0]))
+
+
 class TestIndexAt:
     @pytest.mark.parametrize(("t", "expected"), [(0.0, 0), (0.31, 3), (0.29, 3), (0.9, 9)])
     def test_finds_the_nearest_sample(self, t: float, expected: int) -> None:

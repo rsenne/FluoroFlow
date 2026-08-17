@@ -6,6 +6,10 @@ signal is fit to the experimental signal by iteratively reweighted least squares
 (real neural transients, absent from the isosbestic) are downweighted each
 iteration, so the converged fit tracks only what the two channels share:
 photobleaching and motion artifact. That fit is the baseline.
+
+The two channels are multiplexed from different acquisition instants, so they are
+never quite time-aligned sample-for-sample; the isosbestic is linearly interpolated
+onto the signal's own timestamps before fitting.
 """
 
 from __future__ import annotations
@@ -30,12 +34,7 @@ def fit_isosbestic_baseline(
     tol: float = 1e-6,
 ) -> Trace:
     """Robustly regress the isosbestic onto the signal and return the fitted baseline."""
-    if len(signal) != len(isosbestic):
-        msg = (
-            f"signal and isosbestic must be frame-aligned (same sample count); got "
-            f"{len(signal)} for {signal.name!r} and {len(isosbestic)} for {isosbestic.name!r}."
-        )
-        raise ValidationError(msg)
+    isosbestic = isosbestic.interpolate_to(signal.time)
     if signal.n_missing or isosbestic.n_missing:
         msg = "Baseline fitting cannot run through missing samples; interpolate or crop first."
         raise ValidationError(msg)
