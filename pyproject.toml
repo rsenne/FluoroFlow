@@ -56,6 +56,7 @@ dev = [
     "mypy>=1.11",
     "pre-commit>=3.7",
     "pandas-stubs>=2.1",
+    "marimo>=0.23.16",
 ]
 
 # Testing

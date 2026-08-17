@@ -38,3 +38,6 @@ Thumbs.db
 *.tev
 *.tsq
 scratch/
+
+# Local scratch notebooks, not part of the package.
+dev/

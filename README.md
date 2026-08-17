@@ -1,7 +1,7 @@
 # FluoroFlow
 
 FluoroFlow analyzes Neurophotometrics-style fiber photometry recordings with
-one or two signal channels, a shared isosbestic control, and behavioral events.
+one or two signal channels, an optional shared isosbestic control, and behavioral events.
 It provides an immutable data model, isosbestic artifact correction and dF/F,
 and event-triggered averages (ETAs) within and across animals.
 
@@ -35,15 +35,14 @@ signal.sampling   # interval range, coefficient of variation, and frame gaps
 signal.n_missing  # number of NaN samples
 ```
 
-Transforms return a new `Trace` and append a `Step` to its history.
+Transforms return a new `Trace` and record the operation in its history.
 
 ```python
-from fluoroflow import Step
-
-detrended = signal.derive(values=residual, step=Step("airpls", {"lam": 1e7}))
-detrended.describe_history()
-#  1. Step('airpls', lam=10000000.0)
-detrended.has_step("airpls")  # True
+cropped = signal.time_slice(10.0, 20.0)
+cropped.history[-1]
+# Step('time_slice', start=10.0, stop=20.0, n_dropped_before=300,
+#      n_dropped_after=8400, n_kept=300)
+cropped.has_step("time_slice")  # True
 ```
 
 Useful methods include:
@@ -89,7 +88,8 @@ rec = rec.map_traces(lambda tr: tr.time_slice(0.0, 1800.0))
 
 ## Preprocessing
 
-`preprocess()` applies three optional stages to every signal channel:
+`preprocess()` optionally filters the traces, fits an isosbestic baseline for
+each signal, and returns either dF/F or a baseline-subtracted signal.
 
 ```python
 from fluoroflow import DffOptions, PreprocessOptions, preprocess
@@ -99,29 +99,39 @@ out = preprocess(rec)
 
 - **Lowpass:** a zero-phase Butterworth filter applied to signals and the
   isosbestic. Defaults: `cutoff_hz=3.0`, `order=2`.
-- **Baseline correction:** robustly regress the isosbestic onto each signal
+- **Baseline fit:** robustly regress the isosbestic onto each signal
   using iteratively reweighted least squares with Tukey's bisquare weights
   (Keevers & Jean-Richard-dit-Bressel, *Neurophotonics*, 2025). Signal-only
   transients are downweighted, leaving shared bleaching and motion artifacts in
-  the fitted baseline. Defaults: `tuning_constant=1.4`, `max_iter=50`,
-  `tol=1e-6`.
-- **dF/F:** compute `(signal - baseline) / baseline`, optionally normalized.
+  the fit. The isosbestic is interpolated onto each signal's timestamps before
+  fitting. Defaults: `tuning_constant=1.4`, `max_iter=50`, `tol=1e-6`.
+- **Output:** when dF/F is enabled, compute `(signal - baseline) / baseline`
+  from the filtered signal and fitted baseline. When it is disabled, subtract
+  the fitted baseline instead.
 
 | method | formula |
 |---|---|
 | `"dff"` | `(signal - baseline) / baseline` |
 | `"z"` | `(dff - mean) / std` |
 | `"mad_z"` | `(dff - median) / MAD` |
-| `"null_z"` | `dff / rms(dff)` |
+| `"null_z"` | `dff / rms(dff)` without recentering |
 
 ```python
 out = preprocess(rec, PreprocessOptions(dff=DffOptions(method="null_z")))
 out = preprocess(rec, PreprocessOptions(baseline=None, dff=None))  # lowpass only
 ```
 
-Set an options field to `None` to skip that stage. dF/F requires baseline
-correction, and baseline correction requires an isosbestic control. The
-isosbestic is filtered but is not converted to dF/F.
+Set an options field to `None` to skip it. Enabling dF/F requires the baseline
+fit, and enabling the baseline fit requires an isosbestic control. The
+isosbestic is filtered but is not baseline-corrected or converted to dF/F.
+
+The default output records `lowpass` and `dff` on each signal:
+
+```python
+processed = preprocess(rec)["Region0G"]
+[step.name for step in processed.history]
+# ['lowpass', 'dff']
+```
 
 The stages are also available individually from `fluoroflow.preprocessing`:
 `lowpass_filter`, `fit_isosbestic_baseline`, `baseline_correct`, and
