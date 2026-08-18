@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from scipy import stats
 
 from fluoroflow.eta.animal import AnimalETA
+from fluoroflow.eta.inference import NullSpec, Significance, compare_to_null
 from fluoroflow.exceptions import InsufficientSamplesError, ValidationError
 
 if TYPE_CHECKING:
@@ -31,6 +32,26 @@ class PopulationETA:
     n_animals: int
     method: Literal["t", "bootstrap"]
     confidence: float
+
+    def significance(
+        self,
+        *,
+        null: NullSpec = 0.0,
+        baseline: tuple[float | None, float | None] | None = None,
+        min_duration: float | None = None,
+    ) -> Significance:
+        """Find where the across-animal confidence band excludes the null."""
+        return compare_to_null(
+            self.time,
+            self.mean,
+            self.ci_lower,
+            self.ci_upper,
+            null=null,
+            baseline=baseline,
+            min_duration=min_duration,
+            confidence=self.confidence,
+            name="population_significant",
+        )
 
     def to_frame(self) -> pd.DataFrame:
         """Return the average as a :class:`pandas.DataFrame`."""

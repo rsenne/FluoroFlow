@@ -38,9 +38,15 @@ class BaselineOptions:
 
 @dataclass(frozen=True, slots=True)
 class DffOptions:
-    """dF/F normalization settings."""
+    """dF/F normalization settings.
 
-    method: DffMethod = "dff"
+    ``"null_z"`` is the default because it scales dF/F without recentering,
+    leaving the zero the isosbestic baseline fit established. That keeps zero
+    meaningful as a null, which is what :meth:`AnimalETA.significance` and its
+    counterparts test against. Ask for ``"dff"`` to get the raw ratio back.
+    """
+
+    method: DffMethod = "null_z"
 
 
 @dataclass(frozen=True, slots=True)

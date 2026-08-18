@@ -24,12 +24,19 @@ def make_recording(n: int = 200, fs: float = 30.0, seed: int = 0) -> Recording:
 
 
 class TestPreprocess:
-    def test_default_pipeline_produces_dff(self) -> None:
+    def test_default_pipeline_produces_null_z(self) -> None:
         rec = make_recording()
         out = preprocess(rec)
         result = out["Region0G"]
-        assert result.units == "dF/F"
+        assert result.units == "null-Z"
         assert len(result) == len(rec["Region0G"])
+        assert result.history[-1].params["method"] == "null_z"
+
+    def test_raw_dff_is_still_available(self) -> None:
+        rec = make_recording()
+        out = preprocess(rec, PreprocessOptions(dff=DffOptions(method="dff")))
+        result = out["Region0G"]
+        assert result.units == "dF/F"
         assert result.history[-1].params["method"] == "dff"
 
     def test_lowpass_only_when_baseline_disabled(self) -> None:
@@ -56,8 +63,8 @@ class TestPreprocess:
             base["Region0G"], signal2, isosbestic=base["Region0G_iso"], subject="M1", session="s1"
         )
         out = preprocess(rec)
-        assert out.signals[0].units == "dF/F"
-        assert out.signals[1].units == "dF/F"
+        assert out.signals[0].units == "null-Z"
+        assert out.signals[1].units == "null-Z"
 
     def test_baseline_without_isosbestic_raises(self) -> None:
         rec = Recording.from_traces(make_recording()["Region0G"])

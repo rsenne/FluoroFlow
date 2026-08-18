@@ -8,11 +8,15 @@ from fluoroflow.core import Events, Recording, SamplingReport, Step, Trace
 from fluoroflow.eta import (
     AnimalETA,
     BayesianETA,
+    NullSpec,
     PopulationETA,
+    Significance,
     align_to_events,
     animal_eta,
     bayesian_eta,
+    compare_to_null,
     population_eta,
+    resolve_null,
 )
 from fluoroflow.exceptions import FluoroFlowError, InsufficientSamplesError, ValidationError
 from fluoroflow.preprocessing import (
@@ -37,10 +41,12 @@ __all__ = [
     "FluoroFlowError",
     "InsufficientSamplesError",
     "LowpassOptions",
+    "NullSpec",
     "PopulationETA",
     "PreprocessOptions",
     "Recording",
     "SamplingReport",
+    "Significance",
     "Step",
     "Trace",
     "ValidationError",
@@ -48,6 +54,8 @@ __all__ = [
     "align_to_events",
     "animal_eta",
     "bayesian_eta",
+    "compare_to_null",
     "population_eta",
     "preprocess",
+    "resolve_null",
 ]

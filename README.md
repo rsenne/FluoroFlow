@@ -111,13 +111,18 @@ out = preprocess(rec)
 
 | method | formula |
 |---|---|
+| `"null_z"` (default) | `dff / rms(dff)` without recentering |
 | `"dff"` | `(signal - baseline) / baseline` |
 | `"z"` | `(dff - mean) / std` |
 | `"mad_z"` | `(dff - median) / MAD` |
-| `"null_z"` | `dff / rms(dff)` without recentering |
+
+`"null_z"` is the default because it rescales dF/F without recentering, so the
+zero the baseline fit established survives normalization. That keeps zero
+usable as a null for the significance methods below. The other methods are one
+field away:
 
 ```python
-out = preprocess(rec, PreprocessOptions(dff=DffOptions(method="null_z")))
+out = preprocess(rec, PreprocessOptions(dff=DffOptions(method="dff")))
 out = preprocess(rec, PreprocessOptions(baseline=None, dff=None))  # lowpass only
 ```
 
@@ -131,6 +136,7 @@ The default output records `lowpass` and `dff` on each signal:
 processed = preprocess(rec)["Region0G"]
 [step.name for step in processed.history]
 # ['lowpass', 'dff']
+processed.units  # 'null-Z'
 ```
 
 The stages are also available individually from `fluoroflow.preprocessing`:
@@ -179,6 +185,49 @@ bayes.population_mean, bayes.population_ci_lower, bayes.population_ci_upper
 bayes.tau2          # between-animal variance by time point
 bayes.animal_means  # shrunk animal estimates
 ```
+
+### Where the response differs from the null
+
+`AnimalETA`, `PopulationETA`, and `BayesianETA` each expose `significance()`,
+which marks the time points whose confidence interval excludes a null and
+groups them into contiguous epochs.
+
+```python
+sig = pop.significance()
+sig.mask            # bool per time point: the interval excludes the null
+sig.direction       # +1 above the null, -1 below, 0 not significant
+sig.epochs          # contiguous runs as an Events, with onsets and durations
+sig.first_crossing  # onset of the earliest run, or None
+```
+
+The null is zero by default, which is what the `"null_z"` output is anchored
+to. It can instead be a fixed level, or estimated from the ETA's own pre-event
+baseline:
+
+```python
+pop.significance(null="median")                      # median of t < 0
+pop.significance(null="mean", baseline=(-2.0, -0.5))  # over an explicit window
+pop.significance(null=0.5)                            # a fixed level
+```
+
+An estimated null is itself a random quantity, and comparing an interval
+against it treats it as fixed. Prefer zero when preprocessing already puts the
+baseline there.
+
+This reads an interval; it is not a multiple-comparison procedure. Adjacent
+time points are heavily correlated and there is one comparison per sample, so
+isolated significant points are what noise looks like. `min_duration` applies
+the usual consecutive-samples guard, dropping short runs from both the mask and
+the epochs:
+
+```python
+sig = pop.significance(min_duration=0.5)  # runs must persist for 500 ms
+sig.n_epochs, sig.total_duration
+```
+
+`animal_eta` must have been called with a `ci` for `AnimalETA.significance()`
+to have a band to read. The same comparison is available directly as
+`compare_to_null(time, mean, lower, upper, ...)`.
 
 ## Development
 

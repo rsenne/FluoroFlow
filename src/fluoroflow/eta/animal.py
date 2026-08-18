@@ -12,7 +12,8 @@ from scipy import stats
 from fluoroflow.core.events import Events
 from fluoroflow.core.trace import Trace
 from fluoroflow.eta.alignment import align_to_events
-from fluoroflow.exceptions import InsufficientSamplesError
+from fluoroflow.eta.inference import NullSpec, Significance, compare_to_null
+from fluoroflow.exceptions import InsufficientSamplesError, ValidationError
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -34,6 +35,36 @@ class AnimalETA:
     n_dropped: int
     method: Literal["t", "bootstrap"] | None
     confidence: float | None
+
+    def significance(
+        self,
+        *,
+        null: NullSpec = 0.0,
+        baseline: tuple[float | None, float | None] | None = None,
+        min_duration: float | None = None,
+    ) -> Significance:
+        """Find where this animal's confidence band excludes the null.
+
+        Requires a band, so ``animal_eta`` must have been called with a ``ci``.
+        """
+        if self.ci_lower is None or self.ci_upper is None:
+            msg = (
+                f"ETA {self.name!r} was computed with ci=None, so it has no confidence "
+                f"band to compare against a null. Recompute with ci='t' or "
+                f"ci='bootstrap'."
+            )
+            raise ValidationError(msg)
+        return compare_to_null(
+            self.time,
+            self.mean,
+            self.ci_lower,
+            self.ci_upper,
+            null=null,
+            baseline=baseline,
+            min_duration=min_duration,
+            confidence=self.confidence,
+            name=f"{self.name}_significant",
+        )
 
     def to_frame(self) -> pd.DataFrame:
         """Return the average as a :class:`pandas.DataFrame`."""

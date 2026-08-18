@@ -17,6 +17,7 @@ from numpy.typing import NDArray
 from scipy import stats
 
 from fluoroflow.eta.animal import AnimalETA
+from fluoroflow.eta.inference import NullSpec, Significance, compare_to_null
 from fluoroflow.eta.population import check_matching_time
 from fluoroflow.exceptions import InsufficientSamplesError, ValidationError
 
@@ -41,6 +42,31 @@ class BayesianETA:
     tau2: NDArray[np.float64]
     n_animals: int
     confidence: float
+
+    def significance(
+        self,
+        *,
+        null: NullSpec = 0.0,
+        baseline: tuple[float | None, float | None] | None = None,
+        min_duration: float | None = None,
+    ) -> Significance:
+        """Find where the population posterior interval excludes the null.
+
+        This reads the random-effects interval, so between-animal heterogeneity
+        is already priced into the width; expect it to be more conservative than
+        :meth:`PopulationETA.significance` wherever ``tau2`` is large.
+        """
+        return compare_to_null(
+            self.time,
+            self.population_mean,
+            self.population_ci_lower,
+            self.population_ci_upper,
+            null=null,
+            baseline=baseline,
+            min_duration=min_duration,
+            confidence=self.confidence,
+            name="population_significant",
+        )
 
     def to_frame(self) -> pd.DataFrame:
         """Return the population-level posterior as a :class:`pandas.DataFrame`."""
