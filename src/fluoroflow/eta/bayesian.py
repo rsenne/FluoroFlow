@@ -29,7 +29,11 @@ __all__ = ["BayesianETA", "bayesian_eta"]
 
 @dataclass(frozen=True, slots=True)
 class BayesianETA:
-    """Population and per-animal posteriors from a random-effects meta-analysis."""
+    """Population and per-animal posteriors from a random-effects meta-analysis.
+
+    ``animal_means`` are the shrunk posterior estimates; ``animals`` keeps the raw
+    per-animal ETAs that went into the fit, in the same order.
+    """
 
     time: NDArray[np.float64]
     population_mean: NDArray[np.float64]
@@ -40,6 +44,7 @@ class BayesianETA:
     animal_ci_lower: NDArray[np.float64]
     animal_ci_upper: NDArray[np.float64]
     tau2: NDArray[np.float64]
+    animals: tuple[AnimalETA, ...]
     n_animals: int
     confidence: float
 
@@ -141,6 +146,7 @@ def bayesian_eta(animals: Sequence[AnimalETA], *, confidence: float = 0.95) -> B
         animal_ci_lower=animal_ci_lower,
         animal_ci_upper=animal_ci_upper,
         tau2=tau2,
+        animals=tuple(animals),
         n_animals=n_animals,
         confidence=confidence,
     )

@@ -136,3 +136,38 @@ class TestAnimalEta:
         frame = result.to_frame()
         assert frame["ci_lower"].isna().all()
         assert frame["ci_upper"].isna().all()
+
+    def test_trials_are_kept_and_reproduce_the_mean(self) -> None:
+        trace = make_trace()
+        # 0.5 s cannot fit a (-1, 1) window, so only three trials survive.
+        events = Events(times=np.array([0.5, 5.0, 10.0, 15.0]), name="events")
+        result = animal_eta(trace, events, (-1.0, 1.0), ci=None)
+
+        assert result.trials.shape == (3, result.time.size)
+        np.testing.assert_array_equal(result.event_times, [5.0, 10.0, 15.0])
+        np.testing.assert_allclose(result.trials.mean(axis=0), result.mean)
+        center = trace.index_at(10.0)
+        np.testing.assert_allclose(result.trials[1], trace.values[center - 10 : center + 10])
+
+    def test_trials_are_read_only(self) -> None:
+        trace = make_trace()
+        events = Events(times=np.array([5.0, 10.0, 15.0]), name="events")
+        result = animal_eta(trace, events, (-1.0, 1.0), ci=None)
+        with pytest.raises(ValueError, match="read-only"):
+            result.trials[0, 0] = 1.0
+        with pytest.raises(ValueError, match="read-only"):
+            result.event_times[0] = 1.0
+
+    def test_trials_frame_is_long_form(self) -> None:
+        trace = make_trace()
+        events = Events(times=np.array([5.0, 10.0, 15.0]), name="events")
+        result = animal_eta(trace, events, (-1.0, 1.0), ci=None)
+        frame = result.trials_frame()
+
+        n_time = result.time.size
+        assert list(frame.columns) == ["trial", "event_time", "time", "value"]
+        assert len(frame) == 3 * n_time
+        second = frame[frame["trial"] == 1]
+        assert (second["event_time"] == 10.0).all()
+        np.testing.assert_allclose(second["time"], result.time)
+        np.testing.assert_allclose(second["value"], result.trials[1])

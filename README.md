@@ -154,6 +154,9 @@ from fluoroflow import animal_eta
 
 a1 = animal_eta(signal, freezing, window=(-2.0, 5.0), ci="bootstrap")
 a1.mean, a1.sem, a1.ci_lower, a1.ci_upper
+a1.trials         # single-trial windows, one row per surviving event
+a1.event_times    # onset of each row in trials
+a1.trials_frame() # long form: trial, event_time, time, value
 ```
 
 `ci` accepts `"t"`, `"bootstrap"`, or `None`. Trials whose windows extend
@@ -168,6 +171,7 @@ trials as the unit of variance.
 from fluoroflow import population_eta
 
 pop = population_eta([a1, a2, a3], ci="t")
+pop.animals  # the AnimalETAs it was averaged from, in input order
 ```
 
 ### Random-effects model
@@ -184,6 +188,7 @@ bayes = bayesian_eta([a1, a2, a3])
 bayes.population_mean, bayes.population_ci_lower, bayes.population_ci_upper
 bayes.tau2          # between-animal variance by time point
 bayes.animal_means  # shrunk animal estimates
+bayes.animals       # the raw AnimalETAs, in the same order
 ```
 
 ### Where the response differs from the null

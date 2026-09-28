@@ -14,12 +14,15 @@ __all__ = ["align_to_events"]
 
 def align_to_events(
     trace: Trace, events: Events, window: tuple[float, float]
-) -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], int]:
     """Cut a ``window`` of samples around each event onset out of ``trace``.
 
     ``window = (pre, post)`` seconds relative to onset, e.g. ``(-2.0, 5.0)`` for
     2 s before to 5 s after. Trials whose window does not fit fully inside the
     trace are dropped rather than NaN-padded.
+
+    Returns ``(relative_time, trials, event_times, n_dropped)``, where row ``i`` of
+    ``trials`` is the window around onset ``event_times[i]``.
     """
     if not window[0] < window[1]:
         msg = f"window start must be less than window stop, got window={window!r}."
@@ -33,6 +36,7 @@ def align_to_events(
     n_samples = len(trace)
     n_events = len(events)
     valid_rows: list[NDArray[np.float64]] = []
+    kept_times: list[float] = []
     n_dropped = 0
     for t in events.times:
         center = trace.index_at(float(t))
@@ -42,6 +46,7 @@ def align_to_events(
             n_dropped += 1
             continue
         valid_rows.append(trace.values[lo:hi])
+        kept_times.append(float(t))
 
     if not valid_rows:
         msg = (
@@ -52,4 +57,4 @@ def align_to_events(
         raise InsufficientSamplesError(msg)
 
     trials = np.stack(valid_rows)
-    return relative_time, trials, n_dropped
+    return relative_time, trials, np.array(kept_times), n_dropped

@@ -35,6 +35,8 @@ def make_animal(
         sem=np.full(TIME.size, 0.1),
         ci_lower=lower if with_ci else None,
         ci_upper=upper if with_ci else None,
+        trials=np.tile(values, (10, 1)),
+        event_times=np.arange(10, dtype=np.float64),
         n_trials=10,
         n_dropped=0,
         method="t" if with_ci else None,

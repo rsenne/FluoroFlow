@@ -22,6 +22,8 @@ def make_animal(
         sem=np.array(sem),
         ci_lower=None,
         ci_upper=None,
+        trials=np.tile(np.array(mean), (10, 1)),
+        event_times=np.arange(10, dtype=np.float64),
         n_trials=10,
         n_dropped=0,
         method=None,
@@ -69,6 +71,15 @@ class TestPopulationEta:
         second = population_eta(animals, ci="bootstrap", seed=7, n_boot=500)
         np.testing.assert_array_equal(first.ci_lower, second.ci_lower)
         np.testing.assert_array_equal(first.ci_upper, second.ci_upper)
+
+    def test_source_animals_are_kept_in_order(self) -> None:
+        animals = [
+            make_animal("a1", [1.0, 2.0, 3.0], [0.1, 0.1, 0.1]),
+            make_animal("a2", [2.0, 3.0, 4.0], [0.2, 0.2, 0.2]),
+        ]
+        result = population_eta(animals)
+        assert all(kept is given for kept, given in zip(result.animals, animals, strict=True))
+        assert [animal.name for animal in result.animals] == ["a1", "a2"]
 
     def test_mismatched_time_raises(self) -> None:
         animals = [

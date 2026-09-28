@@ -12,7 +12,7 @@ from scipy import stats
 from fluoroflow.core.events import Events
 from fluoroflow.core.trace import Trace
 from fluoroflow.eta.alignment import align_to_events
-from fluoroflow.eta.inference import NullSpec, Significance, compare_to_null
+from fluoroflow.eta.inference import NullSpec, Significance, _frozen, compare_to_null
 from fluoroflow.exceptions import InsufficientSamplesError, ValidationError
 
 if TYPE_CHECKING:
@@ -23,7 +23,11 @@ __all__ = ["AnimalETA", "animal_eta"]
 
 @dataclass(frozen=True, slots=True)
 class AnimalETA:
-    """A single animal's trial-averaged event-triggered average."""
+    """A single animal's trial-averaged event-triggered average.
+
+    ``trials`` keeps the single-trial windows the average was built from, one row
+    per surviving event, with ``event_times`` giving each row's onset.
+    """
 
     name: str
     time: NDArray[np.float64]
@@ -31,6 +35,8 @@ class AnimalETA:
     sem: NDArray[np.float64]
     ci_lower: NDArray[np.float64] | None
     ci_upper: NDArray[np.float64] | None
+    trials: NDArray[np.float64]
+    event_times: NDArray[np.float64]
     n_trials: int
     n_dropped: int
     method: Literal["t", "bootstrap"] | None
@@ -83,6 +89,20 @@ class AnimalETA:
             }
         )
 
+    def trials_frame(self) -> pd.DataFrame:
+        """Return the single trials in long form: one row per (trial, timepoint)."""
+        import pandas as pd
+
+        n_trials, n_time = self.trials.shape
+        return pd.DataFrame(
+            {
+                "trial": np.repeat(np.arange(n_trials), n_time),
+                "event_time": np.repeat(self.event_times, n_time),
+                "time": np.tile(self.time, n_trials),
+                "value": self.trials.ravel(),
+            }
+        )
+
 
 def animal_eta(
     trace: Trace,
@@ -96,7 +116,7 @@ def animal_eta(
     name: str | None = None,
 ) -> AnimalETA:
     """Average single-trial windows aligned to ``events`` into one animal-level ETA."""
-    relative_time, trials, n_dropped = align_to_events(trace, events, window)
+    relative_time, trials, event_times, n_dropped = align_to_events(trace, events, window)
     n_valid = trials.shape[0]
     if n_valid < 2:
         msg = (
@@ -133,6 +153,8 @@ def animal_eta(
         sem=sem,
         ci_lower=ci_lower,
         ci_upper=ci_upper,
+        trials=_frozen(trials),
+        event_times=_frozen(event_times),
         n_trials=n_valid,
         n_dropped=n_dropped,
         method=ci,

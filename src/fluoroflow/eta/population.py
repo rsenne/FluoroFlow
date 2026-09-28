@@ -22,13 +22,17 @@ __all__ = ["PopulationETA", "population_eta"]
 
 @dataclass(frozen=True, slots=True)
 class PopulationETA:
-    """An across-animal event-triggered average."""
+    """An across-animal event-triggered average.
+
+    ``animals`` keeps the per-animal ETAs it was averaged from, in input order.
+    """
 
     time: NDArray[np.float64]
     mean: NDArray[np.float64]
     sem: NDArray[np.float64]
     ci_lower: NDArray[np.float64]
     ci_upper: NDArray[np.float64]
+    animals: tuple[AnimalETA, ...]
     n_animals: int
     method: Literal["t", "bootstrap"]
     confidence: float
@@ -121,6 +125,7 @@ def population_eta(
         sem=sem,
         ci_lower=ci_lower,
         ci_upper=ci_upper,
+        animals=tuple(animals),
         n_animals=n_animals,
         method=ci,
         confidence=confidence,

@@ -17,6 +17,8 @@ def make_animal(name: str, mean: list[float], sem: list[float], *, time: np.ndar
         sem=np.array(sem),
         ci_lower=None,
         ci_upper=None,
+        trials=np.tile(np.array(mean), (10, 1)),
+        event_times=np.arange(10, dtype=np.float64),
         n_trials=10,
         n_dropped=0,
         method=None,
@@ -86,6 +88,16 @@ class TestBayesianEta:
         )
         assert result.population_ci_upper[0] - result.population_mean[0] > 0.0
         assert np.sqrt(expected_var_re) > 0.0
+
+    def test_raw_animals_are_kept_alongside_the_shrunk_estimates(self) -> None:
+        time = np.array([0.0])
+        animals = [
+            make_animal("a1", [0.0], [0.1], time=time),
+            make_animal("a2", [5.0], [0.1], time=time),
+        ]
+        result = bayesian_eta(animals)
+        assert all(kept is given for kept, given in zip(result.animals, animals, strict=True))
+        np.testing.assert_array_equal(result.animals[1].mean, [5.0])
 
     def test_mismatched_time_raises(self) -> None:
         animals = [
